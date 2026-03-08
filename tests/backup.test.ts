@@ -94,26 +94,42 @@ describe('getDirectoryMtime', () => {
     expect(mtime.getTime()).toBe(0);
   });
 
-  test('returns correct mtime for files', () => {
+  test('ignores non-.als files', () => {
     const filePath = path.join(tmpDir, 'file.txt');
     fs.writeFileSync(filePath, 'hello');
     const mtime = getDirectoryMtime(tmpDir);
-    const stat = fs.statSync(filePath);
-    expect(mtime.getTime()).toBe(stat.mtime.getTime());
+    expect(mtime.getTime()).toBe(0);
+  });
+
+  test('returns latest mtime across .als files recursively', () => {
+    const rootAls = path.join(tmpDir, 'set1.als');
+    fs.writeFileSync(rootAls, 'a');
+
+    const nestedDir = path.join(tmpDir, 'Nested');
+    fs.mkdirSync(nestedDir);
+    const nestedAls = path.join(nestedDir, 'set2.als');
+    fs.writeFileSync(nestedAls, 'b');
+
+    const rootStat = fs.statSync(rootAls);
+    const nestedStat = fs.statSync(nestedAls);
+    const expected = rootStat.mtime > nestedStat.mtime ? rootStat.mtime : nestedStat.mtime;
+
+    const mtime = getDirectoryMtime(tmpDir);
+    expect(mtime.getTime()).toBe(expected.getTime());
   });
 });
 
 describe('isAbletonRunning', () => {
-  test('returns false when Ableton is not running', () => {
+  test('returns empty array when Ableton is not running', () => {
     // On a CI/test machine, Ableton won't be running
     const result = isAbletonRunning('/Applications/Ableton Live 11 Suite.app');
-    expect(typeof result).toBe('boolean');
-    expect(result).toBe(false);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual([]);
   });
 
-  test('returns false for a non-existent non-.app binary', () => {
+  test('returns empty array for a non-existent path', () => {
     const result = isAbletonRunning('/nonexistent/path/to/binary');
-    expect(result).toBe(false);
+    expect(result).toEqual([]);
   });
 });
 

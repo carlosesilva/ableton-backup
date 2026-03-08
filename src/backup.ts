@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import archiver from 'archiver';
 import {
   Config,
@@ -26,29 +26,72 @@ export function expandPath(p: string): string {
 
 /**
  * Check whether Ableton Live is currently running.
- * On macOS, the Ableton binary is named "Live" (inside the .app bundle).
- * We use `pgrep -x` for an exact process-name match.
- * Falls back to matching on the full binary path if a custom non-standard path
- * is provided (i.e. not a .app bundle).
+ * Assumes `abletonPath` is an absolute Ableton `.app` path and matches it
+ * against the full process command line.
  */
-export function isAbletonRunning(abletonPath: string): boolean {
+export interface MatchedProcess {
+  pid: number;
+  user: string;
+  command: string;
+}
+
+export interface RunBackupOptions {
+  dryRun?: boolean;
+}
+
+export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
-    if (abletonPath.endsWith('.app')) {
-      // Standard macOS .app bundle: binary is named "Live"
-      execFileSync('pgrep', ['-x', 'Live'], { stdio: 'ignore' });
-    } else {
-      // Non-standard binary path – match by exact full path
-      execFileSync('pgrep', ['-fx', abletonPath], { stdio: 'ignore' });
+    // Includes helper processes under the same app bundle path.
+    const pidsOutput = execFileSync('pgrep', ['-f', abletonPath], {
+      encoding: 'utf8',
+    }).trim();
+
+    if (!pidsOutput) {
+      return [];
     }
-    return true;
+
+    const pids = pidsOutput
+      .split(/\s+/)
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+
+    if (pids.length === 0) {
+      return [];
+    }
+
+    const details = execFileSync(
+      'ps',
+      ['-p', pids.join(','), '-o', 'pid=,user=,command='],
+      { encoding: 'utf8' }
+    )
+      .trim()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    const matched: MatchedProcess[] = [];
+    for (const line of details) {
+      const match = line.match(/^(\d+)\s+(\S+)\s+(.+)$/);
+      if (!match) {
+        continue;
+      }
+      const [, pid, user, command] = match;
+      matched.push({
+        pid: Number(pid),
+        user,
+        command,
+      });
+    }
+
+    return matched;
   } catch {
-    return false;
+    return [];
   }
 }
 
 /**
- * Get the latest modification time (mtime) of any file inside a directory,
- * recursively.
+ * Get the latest modification time (mtime) of any `.als` file inside a
+ * directory, recursively.
  */
 export function getDirectoryMtime(dirPath: string): Date {
   let latest = new Date(0);
@@ -64,7 +107,7 @@ export function getDirectoryMtime(dirPath: string): Date {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else {
+      } else if (entry.isFile() && entry.name.endsWith('.als')) {
         const stat = fs.statSync(full);
         if (stat.mtime > latest) {
           latest = stat.mtime;
@@ -142,11 +185,20 @@ export function findProjects(projectsPath: string): string[] {
  * Returns a summary of actions taken.
  */
 export async function runBackup(
-  config?: Config
+  config?: Config,
+  options?: RunBackupOptions
 ): Promise<{ skipped: string[]; backed: string[]; error?: string }> {
   const cfg = config ?? loadConfig();
+  const dryRun = options?.dryRun ?? false;
 
-  if (isAbletonRunning(cfg.abletonPath)) {
+  const matchedProcesses = isAbletonRunning(cfg.abletonPath);
+  if (matchedProcesses.length > 0) {
+    for (const process of matchedProcesses) {
+      console.log(
+        `Matched Ableton process: pid=${process.pid} user=${process.user} command=${process.command}`
+      );
+    }
+
     return {
       skipped: [],
       backed: [],
@@ -155,7 +207,7 @@ export async function runBackup(
   }
 
   const destination = expandPath(cfg.destinationPath);
-  if (!fs.existsSync(destination)) {
+  if (!dryRun && !fs.existsSync(destination)) {
     fs.mkdirSync(destination, { recursive: true });
   }
 
@@ -181,6 +233,11 @@ export async function runBackup(
     const archiveName = buildArchiveName(projectName, now);
     const outputPath = path.join(destination, archiveName);
 
+    if (dryRun) {
+      backed.push(projectName);
+      continue;
+    }
+
     await zipDirectory(projectPath, outputPath);
 
     setProjectMetadata(metadata, projectPath, {
@@ -191,6 +248,9 @@ export async function runBackup(
     backed.push(projectName);
   }
 
-  saveMetadata(metadata);
+  if (!dryRun) {
+    saveMetadata(metadata);
+  }
+
   return { skipped, backed };
 }

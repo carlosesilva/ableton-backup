@@ -15,7 +15,7 @@ export const CONFIG_DIR = path.join(os.homedir(), '.ableton-backup');
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.yaml');
 
 export const DEFAULT_CONFIG: Config = {
-  abletonPath: '/Applications/Ableton Live 11 Suite.app',
+  abletonPath: '/Applications/Ableton Live 12 Suite.app',
   projectsPath: path.join(os.homedir(), 'Music', 'Ableton'),
   destinationPath: path.join(os.homedir(), 'Documents', 'Ableton Backups'),
   cronFrequency: '0 * * * *',

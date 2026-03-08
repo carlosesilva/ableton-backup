@@ -35,7 +35,7 @@ You will be prompted for:
 
 | Setting | Description | Default |
 |---|---|---|
-| Ableton path | Path to the Ableton Live `.app` bundle | `/Applications/Ableton Live 11 Suite.app` |
+| Ableton path | Path to the Ableton Live `.app` bundle | `/Applications/Ableton Live 12 Suite.app` |
 | Projects path | Folder containing your Live Projects | `~/Music/Ableton` |
 | Destination path | Where backup zips will be saved | `~/Documents/Ableton Backups` |
 | Cron frequency | How often to check for changes ([cron expression](https://crontab.guru/)) | `0 * * * *` (hourly) |
@@ -48,6 +48,7 @@ Configuration is saved to `~/.ableton-backup/config.yaml`.
 ```
 ableton-backup setup          Run the interactive setup wizard
 ableton-backup run            Run a backup cycle right now
+ableton-backup run --dry-run  Show what would be backed up without creating zips
 ableton-backup start          Enable automatic backups (installs cron job)
 ableton-backup stop           Disable automatic backups (removes cron job)
 ableton-backup status         Show current configuration and cron status
@@ -69,6 +70,12 @@ Example – change the backup frequency to every 30 minutes and activate:
 
 ```bash
 ableton-backup config --cron-frequency "*/30 * * * *" --active true
+```
+
+Preview which projects would be backed up without writing any files:
+
+```bash
+ableton-backup run --dry-run
 ```
 
 ## How it works

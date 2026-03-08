@@ -152,10 +152,12 @@ program
 program
   .command('run')
   .description('Run a backup cycle immediately')
-  .action(async () => {
+  .option('--dry-run', 'Show which projects would be backed up without writing files')
+  .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
     console.log(chalk.cyan('🔄  Running backup cycle…'));
-    const result = await runBackup(config);
+    const dryRun = options.dryRun ?? false;
+    const result = await runBackup(config, { dryRun });
 
     if (result.error) {
       console.log(chalk.yellow(`⚠️   ${result.error}`));
@@ -166,7 +168,11 @@ program
       console.log(chalk.yellow('ℹ️   No Ableton projects found.'));
     } else {
       for (const name of result.backed) {
-        console.log(chalk.green(`  ✅  Backed up: ${name}`));
+        if (dryRun) {
+          console.log(chalk.cyan(`  🔎  Would back up: ${name}`));
+        } else {
+          console.log(chalk.green(`  ✅  Backed up: ${name}`));
+        }
       }
       for (const name of result.skipped) {
         console.log(chalk.gray(`  –  No changes: ${name}`));
