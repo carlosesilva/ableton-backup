@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ableton-backup"
+version = "0.1.0"
+description = "Automatically backup Ableton Live projects without affecting performance"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = [
+    "click>=8.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+ableton-backup = "ableton_backup.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ableton_backup*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
