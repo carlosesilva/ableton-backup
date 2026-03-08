@@ -13,6 +13,7 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
+import { appendLog, appendRunHeader } from './logger';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -191,12 +192,20 @@ export async function runBackup(
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
+  if (!dryRun) {
+    appendRunHeader();
+  }
+
   const matchedProcesses = isAbletonRunning(cfg.abletonPath);
   if (matchedProcesses.length > 0) {
     for (const process of matchedProcesses) {
       console.log(
         `Matched Ableton process: pid=${process.pid} user=${process.user} command=${process.command}`
       );
+    }
+
+    if (!dryRun) {
+      appendLog('WARN', 'Ableton Live is currently running. Skipping backup.');
     }
 
     return {
@@ -225,6 +234,9 @@ export async function runBackup(
       const lastModified = new Date(existing.lastModified);
       if (mtime <= lastModified) {
         skipped.push(projectName);
+        if (!dryRun) {
+          appendLog('INFO', `No changes: ${projectName}`);
+        }
         continue;
       }
     }
@@ -245,11 +257,16 @@ export async function runBackup(
       lastModified: mtime.toISOString(),
     });
 
+    appendLog('INFO', `Backed up: ${projectName}`);
     backed.push(projectName);
   }
 
   if (!dryRun) {
     saveMetadata(metadata);
+    appendLog(
+      'INFO',
+      `Backup run complete. Backed: ${backed.length}, Skipped: ${skipped.length}`
+    );
   }
 
   return { skipped, backed };
