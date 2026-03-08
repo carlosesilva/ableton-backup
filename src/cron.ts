@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import path from 'path';
+import { LOG_FILE } from './logger';
 
 export const CRON_MARKER = '# ableton-backup';
 
@@ -8,7 +9,7 @@ export const CRON_MARKER = '# ableton-backup';
  * The line runs the ableton-backup binary (resolved via `which`) with the `run` command.
  */
 export function buildCronLine(frequency: string, binPath: string): string {
-  return `${frequency} ${binPath} run ${CRON_MARKER}`;
+  return `${frequency} ${binPath} run >> "${LOG_FILE}" 2>&1 ${CRON_MARKER}`;
 }
 
 /**

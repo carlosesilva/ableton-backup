@@ -12,7 +12,6 @@ import {
 } from './config';
 import { installCron, removeCron, isCronInstalled } from './cron';
 import { runBackup } from './backup';
-import { appendToLog } from './logger';
 
 const program = new Command();
 
@@ -158,45 +157,26 @@ program
     const config = loadConfig();
     console.log(chalk.cyan('🔄  Running backup cycle…'));
     const dryRun = options.dryRun ?? false;
-
-    if (!dryRun) {
-      appendToLog('Backup run started');
-    }
-
     const result = await runBackup(config, { dryRun });
 
     if (result.error) {
       console.log(chalk.yellow(`⚠️   ${result.error}`));
-      if (!dryRun) {
-        appendToLog(`Skipped: ${result.error}`);
-      }
       process.exit(0);
     }
 
     if (result.backed.length === 0 && result.skipped.length === 0) {
       console.log(chalk.yellow('ℹ️   No Ableton projects found.'));
-      if (!dryRun) {
-        appendToLog('No Ableton projects found');
-      }
     } else {
       for (const name of result.backed) {
         if (dryRun) {
           console.log(chalk.cyan(`  🔎  Would back up: ${name}`));
         } else {
           console.log(chalk.green(`  ✅  Backed up: ${name}`));
-          appendToLog(`Backed up: ${name}`);
         }
       }
       for (const name of result.skipped) {
         console.log(chalk.gray(`  –  No changes: ${name}`));
-        if (!dryRun) {
-          appendToLog(`No changes: ${name}`);
-        }
       }
-    }
-
-    if (!dryRun) {
-      appendToLog('Backup run finished');
     }
   });
 
