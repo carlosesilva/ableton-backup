@@ -139,15 +139,16 @@ export function zipDirectory(sourceDir: string, outputPath: string): Promise<voi
 }
 
 /**
- * Build the archive file name: `<project name> (Backup <timestamp>).zip`
+ * Build the archive file name: `<project name> (Backup <timestamp> <computerName>).zip`
  */
-export function buildArchiveName(projectName: string, timestamp: Date): string {
+export function buildArchiveName(projectName: string, timestamp: Date, computerName?: string): string {
   const ts = timestamp
     .toISOString()
     .replace(/[:.]/g, '-')
     .replace('T', '_')
     .replace('Z', '');
-  return `${projectName} (Backup ${ts}).zip`;
+  const suffix = computerName ? ` ${computerName}` : '';
+  return `${projectName} (Backup ${ts}${suffix}).zip`;
 }
 
 /**
@@ -230,7 +231,7 @@ export async function runBackup(
     }
 
     const now = new Date();
-    const archiveName = buildArchiveName(projectName, now);
+    const archiveName = buildArchiveName(projectName, now, cfg.computerName);
     const outputPath = path.join(destination, archiveName);
 
     if (dryRun) {

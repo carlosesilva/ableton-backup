@@ -56,6 +56,12 @@ program
         default: existing.cronFrequency,
       },
       {
+        type: 'input',
+        name: 'computerName',
+        message: 'Computer name (added to backup zip filename):',
+        default: existing.computerName,
+      },
+      {
         type: 'confirm',
         name: 'active',
         message: 'Activate automatic backups now?',
@@ -68,6 +74,7 @@ program
       projectsPath: answers.projectsPath as string,
       destinationPath: answers.destinationPath as string,
       cronFrequency: answers.cronFrequency as string,
+      computerName: answers.computerName as string,
       active: answers.active as boolean,
     };
 
@@ -92,6 +99,7 @@ program
   .option('--projects-path <path>', 'Set Ableton Live Projects folder path')
   .option('--destination-path <path>', 'Set backup destination path')
   .option('--cron-frequency <expr>', 'Set cron frequency expression')
+  .option('--computer-name <name>', 'Set the computer name added to zip filenames')
   .option('--active <bool>', 'Enable or disable automatic backups (true/false)')
   .action((options) => {
     const config = loadConfig();
@@ -111,6 +119,10 @@ program
     }
     if (options.cronFrequency) {
       config.cronFrequency = options.cronFrequency as string;
+      changed = true;
+    }
+    if (options.computerName) {
+      config.computerName = options.computerName as string;
       changed = true;
     }
     if (options.active !== undefined) {
@@ -137,6 +149,7 @@ program
         ['Projects path', config.projectsPath],
         ['Destination path', config.destinationPath],
         ['Cron frequency', config.cronFrequency],
+        ['Computer name', config.computerName],
         ['Active', String(config.active)],
         ['Config file', CONFIG_FILE],
       ];
@@ -222,6 +235,7 @@ program
     console.log(`  Ableton path       : ${config.abletonPath}`);
     console.log(`  Projects path      : ${config.projectsPath}`);
     console.log(`  Destination path   : ${config.destinationPath}`);
+    console.log(`  Computer name      : ${config.computerName}`);
     console.log();
   });
 

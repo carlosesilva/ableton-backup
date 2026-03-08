@@ -9,6 +9,7 @@ export interface Config {
   destinationPath: string;
   cronFrequency: string;
   active: boolean;
+  computerName: string;
 }
 
 export const CONFIG_DIR = path.join(os.homedir(), '.ableton-backup');
@@ -20,6 +21,7 @@ export const DEFAULT_CONFIG: Config = {
   destinationPath: path.join(os.homedir(), 'Documents', 'Ableton Backups'),
   cronFrequency: '0 * * * *',
   active: false,
+  computerName: os.hostname(),
 };
 
 export function ensureConfigDir(): void {
