@@ -12,6 +12,7 @@ import {
 } from './config';
 import { installCron, removeCron, isCronInstalled } from './cron';
 import { runBackup } from './backup';
+import logger from './logger';
 
 const program = new Command();
 
@@ -28,7 +29,7 @@ program
   .action(async () => {
     const existing = configExists() ? loadConfig() : { ...DEFAULT_CONFIG };
 
-    console.log(chalk.cyan('\n🎛  Ableton Backup – Setup\n'));
+    logger.info(chalk.cyan('\n🎛  Ableton Backup – Setup\n'));
 
     const answers = await inquirer.prompt([
       {
@@ -86,14 +87,14 @@ program
     };
 
     saveConfig(config);
-    console.log(chalk.green(`\n✅  Configuration saved to ${CONFIG_FILE}`));
+    logger.info(chalk.green(`\n✅  Configuration saved to ${CONFIG_FILE}`));
 
     if (config.active) {
       installCron(config.cronFrequency, config.nodePath);
-      console.log(chalk.green(`✅  Cron job installed (${config.cronFrequency})`));
+      logger.info(chalk.green(`✅  Cron job installed (${config.cronFrequency})`));
     } else {
       removeCron();
-      console.log(chalk.yellow('⚠️   Automatic backups are disabled.'));
+      logger.warn(chalk.yellow('⚠️   Automatic backups are disabled.'));
     }
   });
 
@@ -144,18 +145,18 @@ program
 
     if (changed) {
       saveConfig(config);
-      console.log(chalk.green(`✅  Configuration updated (${CONFIG_FILE})`));
+      logger.info(chalk.green(`✅  Configuration updated (${CONFIG_FILE})`));
 
       if (config.active) {
         installCron(config.cronFrequency, config.nodePath);
-        console.log(chalk.green(`✅  Cron job updated (${config.cronFrequency})`));
+        logger.info(chalk.green(`✅  Cron job updated (${config.cronFrequency})`));
       } else {
         removeCron();
-        console.log(chalk.yellow('⚠️   Automatic backups disabled.'));
+        logger.warn(chalk.yellow('⚠️   Automatic backups disabled.'));
       }
     } else {
       // Print current config
-      console.log(chalk.cyan('\n📋  Current configuration:\n'));
+      logger.info(chalk.cyan('\n📋  Current configuration:\n'));
       const entries: [string, string][] = [
         ['Ableton path', config.abletonPath],
         ['Projects path', config.projectsPath],
@@ -167,9 +168,9 @@ program
         ['Config file', CONFIG_FILE],
       ];
       for (const [key, value] of entries) {
-        console.log(`  ${chalk.bold(key.padEnd(20))} ${value}`);
+        logger.info(`  ${chalk.bold(key.padEnd(20))} ${value}`);
       }
-      console.log();
+      logger.info('');
     }
   });
 
@@ -181,27 +182,27 @@ program
   .option('--dry-run', 'Show which projects would be backed up without writing files')
   .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
-    console.log(chalk.cyan('🔄  Running backup cycle…'));
+    logger.info(chalk.cyan('🔄  Running backup cycle…'));
     const dryRun = options.dryRun ?? false;
     const result = await runBackup(config, { dryRun });
 
     if (result.error) {
-      console.log(chalk.yellow(`⚠️   ${result.error}`));
+      logger.warn(chalk.yellow(`⚠️   ${result.error}`));
       process.exit(0);
     }
 
     if (result.backed.length === 0 && result.skipped.length === 0) {
-      console.log(chalk.yellow('ℹ️   No Ableton projects found.'));
+      logger.warn(chalk.yellow('ℹ️   No Ableton projects found.'));
     } else {
       for (const name of result.backed) {
         if (dryRun) {
-          console.log(chalk.cyan(`  🔎  Would back up: ${name}`));
+          logger.info(chalk.cyan(`  🔎  Would back up: ${name}`));
         } else {
-          console.log(chalk.green(`  ✅  Backed up: ${name}`));
+          logger.info(chalk.green(`  ✅  Backed up: ${name}`));
         }
       }
       for (const name of result.skipped) {
-        console.log(chalk.gray(`  –  No changes: ${name}`));
+        logger.info(chalk.gray(`  –  No changes: ${name}`));
       }
     }
   });
@@ -216,7 +217,7 @@ program
     config.active = true;
     saveConfig(config);
     installCron(config.cronFrequency, config.nodePath);
-    console.log(chalk.green(`✅  Automatic backups activated (${config.cronFrequency})`));
+    logger.info(chalk.green(`✅  Automatic backups activated (${config.cronFrequency})`));
   });
 
 // ─── stop ────────────────────────────────────────────────────────────────────
@@ -229,7 +230,7 @@ program
     config.active = false;
     saveConfig(config);
     removeCron();
-    console.log(chalk.yellow('⚠️   Automatic backups deactivated.'));
+    logger.warn(chalk.yellow('⚠️   Automatic backups deactivated.'));
   });
 
 // ─── status ──────────────────────────────────────────────────────────────────
@@ -241,16 +242,16 @@ program
     const config = loadConfig();
     const cronInstalled = isCronInstalled();
 
-    console.log(chalk.cyan('\n📊  Ableton Backup – Status\n'));
-    console.log(`  Config active flag : ${config.active ? chalk.green('enabled') : chalk.red('disabled')}`);
-    console.log(`  Cron job installed : ${cronInstalled ? chalk.green('yes') : chalk.red('no')}`);
-    console.log(`  Cron frequency     : ${config.cronFrequency}`);
-    console.log(`  Ableton path       : ${config.abletonPath}`);
-    console.log(`  Projects path      : ${config.projectsPath}`);
-    console.log(`  Destination path   : ${config.destinationPath}`);
-    console.log(`  Computer name      : ${config.computerName}`);
-    console.log(`  Node path          : ${config.nodePath}`);
-    console.log();
+    logger.info(chalk.cyan('\n📊  Ableton Backup – Status\n'));
+    logger.info(`  Config active flag : ${config.active ? chalk.green('enabled') : chalk.red('disabled')}`);
+    logger.info(`  Cron job installed : ${cronInstalled ? chalk.green('yes') : chalk.red('no')}`);
+    logger.info(`  Cron frequency     : ${config.cronFrequency}`);
+    logger.info(`  Ableton path       : ${config.abletonPath}`);
+    logger.info(`  Projects path      : ${config.projectsPath}`);
+    logger.info(`  Destination path   : ${config.destinationPath}`);
+    logger.info(`  Computer name      : ${config.computerName}`);
+    logger.info(`  Node path          : ${config.nodePath}`);
+    logger.info('');
   });
 
 program.parse(process.argv);

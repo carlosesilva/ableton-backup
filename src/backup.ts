@@ -13,6 +13,7 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
+import logger from './logger';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -195,7 +196,7 @@ export async function runBackup(
   const matchedProcesses = isAbletonRunning(cfg.abletonPath);
   if (matchedProcesses.length > 0) {
     for (const process of matchedProcesses) {
-      console.log(
+      logger.info(
         `Matched Ableton process: pid=${process.pid} user=${process.user} command=${process.command}`
       );
     }
