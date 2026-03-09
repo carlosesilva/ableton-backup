@@ -7,6 +7,7 @@ export interface Config {
   abletonPath: string;
   projectsPath: string;
   destinationPath: string;
+  nodePath: string;
   cronFrequency: string;
   active: boolean;
 }
@@ -18,6 +19,7 @@ export const DEFAULT_CONFIG: Config = {
   abletonPath: '/Applications/Ableton Live 12 Suite.app',
   projectsPath: path.join(os.homedir(), 'Music', 'Ableton'),
   destinationPath: path.join(os.homedir(), 'Documents', 'Ableton Backups'),
+  nodePath: '~/.local/share/mise/shims/node',
   cronFrequency: '0 * * * *',
   active: false,
 };

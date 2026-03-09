@@ -12,15 +12,21 @@ describe('cron marker', () => {
 });
 
 describe('buildCronLine', () => {
-  test('includes the frequency, bin path and marker', () => {
-    const line = buildCronLine('0 * * * *', '/usr/local/bin/ableton-backup');
+  test('includes the frequency, node path, cli path and marker', () => {
+    const line = buildCronLine('0 * * * *', '/usr/local/bin/node', '/tmp/dist/cli.js');
     expect(line).toContain('0 * * * *');
-    expect(line).toContain('/usr/local/bin/ableton-backup');
+    expect(line).toContain('"/usr/local/bin/node"');
+    expect(line).toContain('"/tmp/dist/cli.js" run');
     expect(line).toContain(CRON_MARKER);
   });
 
   test('redirects stdout and stderr to the log file', () => {
-    const line = buildCronLine('0 * * * *', '/usr/local/bin/ableton-backup');
+    const line = buildCronLine('0 * * * *', '/usr/local/bin/node', '/tmp/dist/cli.js');
     expect(line).toContain(`>> "${LOG_FILE}" 2>&1`);
+  });
+
+  test('expands ~ in node path before writing the line', () => {
+    const line = buildCronLine('0 * * * *', '~/.local/share/mise/shims/node', '/tmp/dist/cli.js');
+    expect(line).not.toContain('"~/.local/share/mise/shims/node"');
   });
 });

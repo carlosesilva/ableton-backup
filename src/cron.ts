@@ -1,15 +1,41 @@
 import { execSync } from 'child_process';
 import path from 'path';
+import os from 'os';
 import { LOG_FILE } from './logger';
 
 export const CRON_MARKER = '# ableton-backup';
 
 /**
- * Build the cron job line for the given frequency.
- * The line runs the ableton-backup binary (resolved via `which`) with the `run` command.
+ * Expand a path that starts with `~` to the current user's home directory.
  */
-export function buildCronLine(frequency: string, binPath: string): string {
-  return `${frequency} ${binPath} run >> "${LOG_FILE}" 2>&1 ${CRON_MARKER}`;
+function expandHomePath(p: string): string {
+  if (p.startsWith('~')) {
+    return path.join(os.homedir(), p.slice(1));
+  }
+  return p;
+}
+
+/**
+ * Quote a value for POSIX shell usage in a cron command.
+ */
+function quoteShell(value: string): string {
+  return `"${value.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
+/**
+ * Resolve the absolute path to the CLI entrypoint inside this package.
+ */
+export function resolveCliPath(): string {
+  return path.resolve(__dirname, '..', 'dist', 'cli.js');
+}
+
+/**
+ * Build the cron job line for the given frequency.
+ * The line invokes Node directly with the package CLI file.
+ */
+export function buildCronLine(frequency: string, nodePath: string, cliPath: string): string {
+  const expandedNodePath = expandHomePath(nodePath);
+  return `${frequency} ${quoteShell(expandedNodePath)} ${quoteShell(cliPath)} run >> ${quoteShell(LOG_FILE)} 2>&1 ${CRON_MARKER}`;
 }
 
 /**
@@ -45,24 +71,12 @@ export function setCrontab(content: string): void {
 }
 
 /**
- * Resolve the absolute path to the `ableton-backup` binary.
- * Prefers the globally installed binary; falls back to the local dist version.
- */
-export function resolveBinPath(): string {
-  try {
-    return execSync('which ableton-backup', { encoding: 'utf8' }).trim();
-  } catch {
-    return path.resolve(__dirname, '..', 'dist', 'cli.js');
-  }
-}
-
-/**
  * Install or update the cron job with the given frequency.
  * Removes any previously installed ableton-backup cron line before adding the new one.
  */
-export function installCron(frequency: string): void {
-  const binPath = resolveBinPath();
-  const cronLine = buildCronLine(frequency, binPath);
+export function installCron(frequency: string, nodePath: string): void {
+  const cliPath = resolveCliPath();
+  const cronLine = buildCronLine(frequency, nodePath, cliPath);
   const existing = getCrontab();
   const filtered = existing
     .split('\n')

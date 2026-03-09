@@ -38,6 +38,7 @@ You will be prompted for:
 | Ableton path | Path to the Ableton Live `.app` bundle | `/Applications/Ableton Live 12 Suite.app` |
 | Projects path | Folder containing your Live Projects | `~/Music/Ableton` |
 | Destination path | Where backup zips will be saved | `~/Documents/Ableton Backups` |
+| Node path | Node.js executable used by cron | `~/.local/share/mise/shims/node` |
 | Cron frequency | How often to check for changes ([cron expression](https://crontab.guru/)) | `0 * * * *` (hourly) |
 | Activate now | Install the cron job immediately | No |
 
@@ -62,6 +63,7 @@ ableton-backup config [opts]  Update individual settings (see below)
 --ableton-path <path>       Set the Ableton Live application path
 --projects-path <path>      Set the Live Projects folder path
 --destination-path <path>   Set the backup destination path
+--node-path <path>          Set Node.js binary path used by cron
 --cron-frequency <expr>     Set the cron frequency expression
 --active <true|false>       Enable or disable automatic backups
 ```
@@ -80,7 +82,7 @@ ableton-backup run --dry-run
 
 ## How it works
 
-1. On each cron tick, `ableton-backup run` is called automatically.
+1. On each cron tick, the configured Node binary runs `dist/cli.js run` automatically.
 2. If Ableton Live is currently open, the run is skipped to avoid performance impact.
 3. Every Live Project directory (a folder containing a `.als` file) under the configured projects path is inspected.
 4. If a project has been modified since its last backup (or has never been backed up), it is zipped to the destination folder.

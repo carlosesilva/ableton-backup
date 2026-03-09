@@ -51,6 +51,12 @@ program
       },
       {
         type: 'input',
+        name: 'nodePath',
+        message: 'Path to Node.js binary used by cron:',
+        default: existing.nodePath,
+      },
+      {
+        type: 'input',
         name: 'cronFrequency',
         message: 'Cron frequency (cron expression):',
         default: existing.cronFrequency,
@@ -67,6 +73,7 @@ program
       abletonPath: answers.abletonPath as string,
       projectsPath: answers.projectsPath as string,
       destinationPath: answers.destinationPath as string,
+      nodePath: answers.nodePath as string,
       cronFrequency: answers.cronFrequency as string,
       active: answers.active as boolean,
     };
@@ -75,7 +82,7 @@ program
     console.log(chalk.green(`\n✅  Configuration saved to ${CONFIG_FILE}`));
 
     if (config.active) {
-      installCron(config.cronFrequency);
+      installCron(config.cronFrequency, config.nodePath);
       console.log(chalk.green(`✅  Cron job installed (${config.cronFrequency})`));
     } else {
       removeCron();
@@ -91,6 +98,7 @@ program
   .option('--ableton-path <path>', 'Set Ableton Live application path')
   .option('--projects-path <path>', 'Set Ableton Live Projects folder path')
   .option('--destination-path <path>', 'Set backup destination path')
+  .option('--node-path <path>', 'Set Node.js binary path used by cron')
   .option('--cron-frequency <expr>', 'Set cron frequency expression')
   .option('--active <bool>', 'Enable or disable automatic backups (true/false)')
   .action((options) => {
@@ -109,6 +117,10 @@ program
       config.destinationPath = options.destinationPath as string;
       changed = true;
     }
+    if (options.nodePath) {
+      config.nodePath = options.nodePath as string;
+      changed = true;
+    }
     if (options.cronFrequency) {
       config.cronFrequency = options.cronFrequency as string;
       changed = true;
@@ -123,7 +135,7 @@ program
       console.log(chalk.green(`✅  Configuration updated (${CONFIG_FILE})`));
 
       if (config.active) {
-        installCron(config.cronFrequency);
+        installCron(config.cronFrequency, config.nodePath);
         console.log(chalk.green(`✅  Cron job updated (${config.cronFrequency})`));
       } else {
         removeCron();
@@ -136,6 +148,7 @@ program
         ['Ableton path', config.abletonPath],
         ['Projects path', config.projectsPath],
         ['Destination path', config.destinationPath],
+        ['Node path', config.nodePath],
         ['Cron frequency', config.cronFrequency],
         ['Active', String(config.active)],
         ['Config file', CONFIG_FILE],
@@ -189,7 +202,7 @@ program
     const config = loadConfig();
     config.active = true;
     saveConfig(config);
-    installCron(config.cronFrequency);
+    installCron(config.cronFrequency, config.nodePath);
     console.log(chalk.green(`✅  Automatic backups activated (${config.cronFrequency})`));
   });
 
@@ -222,6 +235,7 @@ program
     console.log(`  Ableton path       : ${config.abletonPath}`);
     console.log(`  Projects path      : ${config.projectsPath}`);
     console.log(`  Destination path   : ${config.destinationPath}`);
+    console.log(`  Node path          : ${config.nodePath}`);
     console.log();
   });
 
