@@ -10,6 +10,7 @@ export interface Config {
   nodePath: string;
   cronFrequency: string;
   active: boolean;
+  computerName: string;
 }
 
 export const CONFIG_DIR = path.join(os.homedir(), '.ableton-backup');
@@ -22,6 +23,7 @@ export const DEFAULT_CONFIG: Config = {
   nodePath: '~/.local/share/mise/shims/node',
   cronFrequency: '0 * * * *',
   active: false,
+  computerName: os.hostname(),
 };
 
 export function ensureConfigDir(): void {
