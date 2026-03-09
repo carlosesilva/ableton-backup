@@ -231,11 +231,16 @@ export async function runBackup(
 
     const now = new Date();
     const archiveName = buildArchiveName(projectName, now);
-    const outputPath = path.join(destination, archiveName);
+    const projectBackupDir = path.join(destination, projectName);
+    const outputPath = path.join(projectBackupDir, archiveName);
 
     if (dryRun) {
       backed.push(projectName);
       continue;
+    }
+
+    if (!fs.existsSync(projectBackupDir)) {
+      fs.mkdirSync(projectBackupDir, { recursive: true });
     }
 
     await zipDirectory(projectPath, outputPath);

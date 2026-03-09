@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import * as metadataModule from '../src/metadata';
 import {
   expandPath,
   buildArchiveName,
@@ -8,6 +9,7 @@ import {
   getDirectoryMtime,
   zipDirectory,
   isAbletonRunning,
+  runBackup,
 } from '../src/backup';
 
 describe('expandPath', () => {
@@ -156,6 +158,56 @@ describe('zipDirectory', () => {
     expect(fs.existsSync(outputPath)).toBe(true);
     const stat = fs.statSync(outputPath);
     expect(stat.size).toBeGreaterThan(0);
+  });
+});
+
+describe('runBackup', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-runbackup-test-'));
+    jest.spyOn(metadataModule, 'loadMetadata').mockReturnValue({ projects: {} });
+    jest.spyOn(metadataModule, 'saveMetadata').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    jest.restoreAllMocks();
+  });
+
+  test('stores backup inside a project-named subdirectory', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectName = 'My Song';
+    const projectDir = path.join(projectsDir, projectName);
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    const config = {
+      abletonPath: '/nonexistent/Ableton.app',
+      projectsPath: projectsDir,
+      destinationPath: destDir,
+      nodePath: '/usr/bin/node',
+      cronFrequency: '0 * * * *',
+      active: false,
+    };
+
+    await runBackup(config);
+
+    const projectBackupDir = path.join(destDir, projectName);
+    expect(fs.existsSync(projectBackupDir)).toBe(true);
+    expect(fs.statSync(projectBackupDir).isDirectory()).toBe(true);
+
+    const files = fs.readdirSync(projectBackupDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(new RegExp(`^${projectName} \\(Backup .+\\)\\.zip$`));
+
+    // Backup should NOT be placed directly in the destination root
+    const rootFiles = fs.readdirSync(destDir).filter((f) => f.endsWith('.zip'));
+    expect(rootFiles).toHaveLength(0);
   });
 });
 
