@@ -13,7 +13,10 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
-import { appendLog, appendRunHeader } from './logger';
+
+function log(message: string): void {
+  console.log(`[${new Date().toISOString()}] ${message}`);
+}
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -193,7 +196,8 @@ export async function runBackup(
   const dryRun = options?.dryRun ?? false;
 
   if (!dryRun) {
-    appendRunHeader();
+    console.log(`\n${'='.repeat(60)}`);
+    log('Backup run started');
   }
 
   const matchedProcesses = isAbletonRunning(cfg.abletonPath);
@@ -206,9 +210,9 @@ export async function runBackup(
 
     if (!dryRun) {
       for (const proc of matchedProcesses) {
-        appendLog(`Matched Ableton process: pid=${proc.pid} user=${proc.user} command=${proc.command}`);
+        log(`Matched Ableton process: pid=${proc.pid} user=${proc.user} command=${proc.command}`);
       }
-      appendLog('Ableton Live is running. Skipping backup.');
+      log('Ableton Live is running. Skipping backup.');
     }
 
     return {
@@ -229,7 +233,7 @@ export async function runBackup(
   const backed: string[] = [];
 
   if (!dryRun) {
-    appendLog(`Found ${projects.length} project(s).`);
+    log(`Found ${projects.length} project(s).`);
   }
 
   for (const projectPath of projects) {
@@ -242,7 +246,7 @@ export async function runBackup(
       if (mtime <= lastModified) {
         skipped.push(projectName);
         if (!dryRun) {
-          appendLog(`Skipped (unchanged): ${projectName}`);
+          log(`Skipped (unchanged): ${projectName}`);
         }
         continue;
       }
@@ -264,13 +268,13 @@ export async function runBackup(
       lastModified: mtime.toISOString(),
     });
 
-    appendLog(`Backed up: ${projectName} -> ${archiveName}`);
+    log(`Backed up: ${projectName} -> ${archiveName}`);
     backed.push(projectName);
   }
 
   if (!dryRun) {
     saveMetadata(metadata);
-    appendLog(`Run complete. Backed: ${backed.length}, Skipped: ${skipped.length}`);
+    log(`Run complete. Backed: ${backed.length}, Skipped: ${skipped.length}`);
   }
 
   return { skipped, backed };
