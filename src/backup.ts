@@ -193,6 +193,8 @@ export async function runBackup(
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
+  logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
+
   const matchedProcesses = isAbletonRunning(cfg.abletonPath);
   if (matchedProcesses.length > 0) {
     for (const process of matchedProcesses) {
@@ -208,6 +210,8 @@ export async function runBackup(
     };
   }
 
+  logger.info('Ableton is not running. Proceeding with backup.');
+
   const destination = expandPath(cfg.destinationPath);
   if (!dryRun && !fs.existsSync(destination)) {
     fs.mkdirSync(destination, { recursive: true });
@@ -215,17 +219,22 @@ export async function runBackup(
 
   const metadata = loadMetadata();
   const projects = findProjects(cfg.projectsPath);
+  logger.info(`Found ${projects.length} project(s) in ${cfg.projectsPath}.`);
+
   const skipped: string[] = [];
   const backed: string[] = [];
 
   for (const projectPath of projects) {
     const projectName = path.basename(projectPath);
+    logger.info(`Checking project: ${projectName}`);
+
     const mtime = getDirectoryMtime(projectPath);
     const existing = getProjectMetadata(metadata, projectPath);
 
     if (existing) {
       const lastModified = new Date(existing.lastModified);
       if (mtime <= lastModified) {
+        logger.info(`Skipping ${projectName}: no changes since last backup.`);
         skipped.push(projectName);
         continue;
       }
@@ -237,15 +246,19 @@ export async function runBackup(
     const outputPath = path.join(projectBackupDir, archiveName);
 
     if (dryRun) {
+      logger.info(`[Dry run] Would back up ${projectName} to ${outputPath}`);
       backed.push(projectName);
       continue;
     }
+
+    logger.info(`Backing up ${projectName}...`);
 
     if (!fs.existsSync(projectBackupDir)) {
       fs.mkdirSync(projectBackupDir, { recursive: true });
     }
 
     await zipDirectory(projectPath, outputPath);
+    logger.info(`Backed up ${projectName} to ${outputPath}`);
 
     setProjectMetadata(metadata, projectPath, {
       lastBackup: now.toISOString(),
@@ -258,6 +271,10 @@ export async function runBackup(
   if (!dryRun) {
     saveMetadata(metadata);
   }
+
+  logger.info(
+    `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
+  );
 
   return { skipped, backed };
 }
