@@ -62,6 +62,12 @@ program
         default: existing.cronFrequency,
       },
       {
+        type: 'input',
+        name: 'computerName',
+        message: 'Computer name (added to backup zip filename):',
+        default: existing.computerName,
+      },
+      {
         type: 'confirm',
         name: 'active',
         message: 'Activate automatic backups now?',
@@ -75,6 +81,7 @@ program
       destinationPath: answers.destinationPath as string,
       nodePath: answers.nodePath as string,
       cronFrequency: answers.cronFrequency as string,
+      computerName: answers.computerName as string,
       active: answers.active as boolean,
     };
 
@@ -100,6 +107,7 @@ program
   .option('--destination-path <path>', 'Set backup destination path')
   .option('--node-path <path>', 'Set Node.js binary path used by cron')
   .option('--cron-frequency <expr>', 'Set cron frequency expression')
+  .option('--computer-name <name>', 'Set the computer name added to zip filenames')
   .option('--active <bool>', 'Enable or disable automatic backups (true/false)')
   .action((options) => {
     const config = loadConfig();
@@ -123,6 +131,10 @@ program
     }
     if (options.cronFrequency) {
       config.cronFrequency = options.cronFrequency as string;
+      changed = true;
+    }
+    if (options.computerName) {
+      config.computerName = options.computerName as string;
       changed = true;
     }
     if (options.active !== undefined) {
@@ -150,6 +162,7 @@ program
         ['Destination path', config.destinationPath],
         ['Node path', config.nodePath],
         ['Cron frequency', config.cronFrequency],
+        ['Computer name', config.computerName],
         ['Active', String(config.active)],
         ['Config file', CONFIG_FILE],
       ];
@@ -235,6 +248,7 @@ program
     console.log(`  Ableton path       : ${config.abletonPath}`);
     console.log(`  Projects path      : ${config.projectsPath}`);
     console.log(`  Destination path   : ${config.destinationPath}`);
+    console.log(`  Computer name      : ${config.computerName}`);
     console.log(`  Node path          : ${config.nodePath}`);
     console.log();
   });
