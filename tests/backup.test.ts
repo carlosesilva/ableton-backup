@@ -36,6 +36,19 @@ describe('buildArchiveName', () => {
     const name = buildArchiveName('Beat #1', date);
     expect(name).toMatch(/^Beat #1 \(Backup .+\)\.zip$/);
   });
+
+  test('includes computer name when provided', () => {
+    const date = new Date('2024-03-15T10:30:00.000Z');
+    const name = buildArchiveName('My Project', date, 'MacBook-Pro');
+    expect(name).toMatch(/^My Project \(Backup .+ MacBook-Pro\)\.zip$/);
+    expect(name).toContain('MacBook-Pro');
+  });
+
+  test('omits computer name suffix when not provided', () => {
+    const date = new Date('2024-03-15T10:30:00.000Z');
+    const name = buildArchiveName('My Project', date);
+    expect(name).toBe('My Project (Backup 2024-03-15_10-30-00-000).zip');
+  });
 });
 
 describe('findProjects', () => {
@@ -193,6 +206,7 @@ describe('runBackup', () => {
       nodePath: '/usr/bin/node',
       cronFrequency: '0 * * * *',
       active: false,
+      computerName: '',
     };
 
     await runBackup(config);
