@@ -1,7 +1,6 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { LOG_FILE } from './logger';
 
 export const CRON_MARKER = '# ableton-backup';
 
@@ -35,7 +34,7 @@ export function resolveCliPath(): string {
  */
 export function buildCronLine(frequency: string, nodePath: string, cliPath: string): string {
   const expandedNodePath = expandHomePath(nodePath);
-  return `${frequency} ${quoteShell(expandedNodePath)} ${quoteShell(cliPath)} run >> ${quoteShell(LOG_FILE)} 2>&1 ${CRON_MARKER}`;
+  return `${frequency} ${quoteShell(expandedNodePath)} ${quoteShell(cliPath)} run ${CRON_MARKER}`;
 }
 
 /**

@@ -3,6 +3,7 @@ import path from 'path';
 import { transports as winstonTransports, format as winstonFormat } from 'winston';
 import { LOG_FILE } from '../src/logger';
 import logger from '../src/logger';
+import { CONFIG_DIR } from '../src/config';
 
 // logform (used by Winston) stores the final formatted string under MESSAGE = Symbol.for('message').
 // This is the documented contract for custom transports and printf formats.
@@ -23,6 +24,20 @@ describe('logger', () => {
   test('logger has a Console transport', () => {
     const hasConsole = logger.transports.some((t) => t instanceof winstonTransports.Console);
     expect(hasConsole).toBe(true);
+  });
+
+  test('logger has a File transport for daily logging', () => {
+    const hasFile = logger.transports.some((t) => t instanceof winstonTransports.File);
+    expect(hasFile).toBe(true);
+  });
+
+  test('daily log file is inside CONFIG_DIR/logs/ with a YYYY-MM-DD name', () => {
+    const fileTransport = logger.transports.find(
+      (t) => t instanceof winstonTransports.File
+    ) as winstonTransports.FileTransportInstance;
+    const logsDir = path.join(CONFIG_DIR, 'logs');
+    expect(fileTransport.dirname).toBe(logsDir);
+    expect(fileTransport.filename).toMatch(/^\d{4}-\d{2}-\d{2}\.log$/);
   });
 
   test('logger format prepends a timestamp to every message', () => {

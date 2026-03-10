@@ -1,5 +1,4 @@
 import { CRON_MARKER, buildCronLine } from '../src/cron';
-import { LOG_FILE } from '../src/logger';
 
 // Re-export private helpers for testing by reimplementing them here
 // (they aren't exported from cron.ts; test the public API instead)
@@ -20,9 +19,10 @@ describe('buildCronLine', () => {
     expect(line).toContain(CRON_MARKER);
   });
 
-  test('redirects stdout and stderr to the log file', () => {
+  test('does not redirect stdout or stderr', () => {
     const line = buildCronLine('0 * * * *', '/usr/local/bin/node', '/tmp/dist/cli.js');
-    expect(line).toContain(`>> "${LOG_FILE}" 2>&1`);
+    expect(line).not.toContain('>>');
+    expect(line).not.toContain('2>&1');
   });
 
   test('expands ~ in node path before writing the line', () => {
