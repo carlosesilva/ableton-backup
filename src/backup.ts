@@ -140,7 +140,7 @@ export function getDirectoryMtime(dirPath: string): Date {
 export function zipDirectory(sourceDir: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = archiver('zip', { zlib: { level: 6 } });
 
     const heartbeat = setInterval(() => {
       logger.info('\tStill archiving...');
