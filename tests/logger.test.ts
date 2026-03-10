@@ -1,7 +1,7 @@
 import os from 'os';
 import path from 'path';
 import { transports as winstonTransports, format as winstonFormat } from 'winston';
-import { LOG_FILE, formatTimestampET, getETDateString, toETDateString, getETHour } from '../src/logger';
+import { LOG_FILE, LOG_LEVEL, formatTimestampET, getETDateString, toETDateString, getETHour } from '../src/logger';
 import logger from '../src/logger';
 import { CONFIG_DIR } from '../src/config';
 
@@ -19,6 +19,11 @@ describe('logger', () => {
     expect(typeof logger.info).toBe('function');
     expect(typeof logger.warn).toBe('function');
     expect(typeof logger.error).toBe('function');
+  });
+
+  test('logger defaults to info level when env var is not set', () => {
+    expect(LOG_LEVEL).toBe('info');
+    expect(logger.level).toBe('info');
   });
 
   test('logger has a Console transport', () => {

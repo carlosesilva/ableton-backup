@@ -4,6 +4,8 @@ import { createLogger, format, transports } from 'winston';
 import { CONFIG_DIR } from './config';
 
 export const LOG_FILE = path.join(CONFIG_DIR, 'backup.log');
+export const LOG_LEVEL_ENV_VAR = 'ABLETON_BACKUP_LOG_LEVEL';
+export const DEBUG_LOG_LEVEL = 'debug';
 
 const TZ = 'America/New_York';
 
@@ -73,7 +75,25 @@ mkdirSync(logsDir, { recursive: true });
 // Since each cron invocation starts a fresh process, the date is always current.
 const todayLog = path.join(logsDir, `${getETDateString()}.log`);
 
+function resolveLogLevel(): string {
+  const raw = process.env[LOG_LEVEL_ENV_VAR];
+  if (!raw) {
+    return 'info';
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  const allowed = new Set(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']);
+  if (!allowed.has(normalized)) {
+    return 'info';
+  }
+
+  return normalized;
+}
+
+export const LOG_LEVEL = resolveLogLevel();
+
 const logger = createLogger({
+  level: LOG_LEVEL,
   format: format.combine(
     format.timestamp({ format: formatTimestampET }),
     format.printf(({ timestamp, level, message }) => `${timestamp} ${level}: ${message}`)

@@ -40,6 +40,7 @@ You will be prompted for:
 | Destination path | Where backup zips will be saved | `~/Documents/Ableton Backups` |
 | Node path | Node.js executable used by cron | `~/.local/share/mise/shims/node` |
 | Cron frequency | How often to check for changes ([cron expression](https://crontab.guru/)) | `0 * * * *` (hourly) |
+| Debug mode | Sets `ABLETON_BACKUP_LOG_LEVEL=debug` for cron runs | No |
 | Activate now | Install the cron job immediately | No |
 
 Configuration is saved to `~/.ableton-backup/config.yaml`.
@@ -65,6 +66,7 @@ ableton-backup config [opts]  Update individual settings (see below)
 --destination-path <path>   Set the backup destination path
 --node-path <path>          Set Node.js binary path used by cron
 --cron-frequency <expr>     Set the cron frequency expression
+--debug-mode <true|false>   Enable or disable debug mode for cron runs
 --active <true|false>       Enable or disable automatic backups
 ```
 
@@ -109,3 +111,14 @@ npm run dev -- <command>
 # Run tests
 npm test
 ```
+
+## Debug Logging
+
+Set `ABLETON_BACKUP_LOG_LEVEL=debug` to show debug logs (including lock/throttle skip reasons):
+
+```bash
+ABLETON_BACKUP_LOG_LEVEL=debug ableton-backup run --dry-run
+```
+
+Valid values are `error`, `warn`, `info`, `http`, `verbose`, `debug`, and `silly`.
+If unset (or invalid), the default is `info`.

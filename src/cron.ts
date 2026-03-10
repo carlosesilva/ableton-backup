@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import os from 'os';
+import { DEBUG_LOG_LEVEL, LOG_LEVEL_ENV_VAR } from './logger';
 
 export const CRON_MARKER = '# ableton-backup';
 
@@ -32,9 +33,15 @@ export function resolveCliPath(): string {
  * Build the cron job line for the given frequency.
  * The line invokes Node directly with the package CLI file.
  */
-export function buildCronLine(frequency: string, nodePath: string, cliPath: string): string {
+export function buildCronLine(
+  frequency: string,
+  nodePath: string,
+  cliPath: string,
+  debugMode = false
+): string {
   const expandedNodePath = expandHomePath(nodePath);
-  return `${frequency} ${quoteShell(expandedNodePath)} ${quoteShell(cliPath)} run ${CRON_MARKER}`;
+  const envPrefix = debugMode ? `${LOG_LEVEL_ENV_VAR}=${DEBUG_LOG_LEVEL} ` : '';
+  return `${frequency} ${envPrefix}${quoteShell(expandedNodePath)} ${quoteShell(cliPath)} run ${CRON_MARKER}`;
 }
 
 /**
@@ -73,9 +80,9 @@ export function setCrontab(content: string): void {
  * Install or update the cron job with the given frequency.
  * Removes any previously installed ableton-backup cron line before adding the new one.
  */
-export function installCron(frequency: string, nodePath: string): void {
+export function installCron(frequency: string, nodePath: string, debugMode = false): void {
   const cliPath = resolveCliPath();
-  const cronLine = buildCronLine(frequency, nodePath, cliPath);
+  const cronLine = buildCronLine(frequency, nodePath, cliPath, debugMode);
   const existing = getCrontab();
   const filtered = existing
     .split('\n')

@@ -55,10 +55,11 @@ describe('config', () => {
   });
 
   test('loadConfig reads saved config', () => {
-    const cfg = { ...DEFAULT_CONFIG, destinationPath: '/custom/dest' };
+    const cfg = { ...DEFAULT_CONFIG, destinationPath: '/custom/dest', debugMode: true };
     saveConfig(cfg);
     const loaded = loadConfig();
     expect(loaded.destinationPath).toBe('/custom/dest');
+    expect(loaded.debugMode).toBe(true);
   });
 
   test('configExists returns false when no file', () => {

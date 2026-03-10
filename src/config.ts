@@ -11,6 +11,7 @@ export interface Config {
   cronFrequency: string;
   active: boolean;
   computerName: string;
+  debugMode: boolean;
 }
 
 export const CONFIG_DIR = path.join(os.homedir(), '.ableton-backup');
@@ -24,6 +25,7 @@ export const DEFAULT_CONFIG: Config = {
   cronFrequency: '* * * * *',
   active: false,
   computerName: os.hostname(),
+  debugMode: false,
 };
 
 export function ensureConfigDir(): void {

@@ -69,6 +69,12 @@ program
       },
       {
         type: 'confirm',
+        name: 'debugMode',
+        message: 'Enable debug mode for cron runs?',
+        default: existing.debugMode,
+      },
+      {
+        type: 'confirm',
         name: 'active',
         message: 'Activate automatic backups now?',
         default: existing.active,
@@ -82,6 +88,7 @@ program
       nodePath: answers.nodePath as string,
       cronFrequency: answers.cronFrequency as string,
       computerName: answers.computerName as string,
+      debugMode: answers.debugMode as boolean,
       active: answers.active as boolean,
     };
 
@@ -89,7 +96,7 @@ program
     logger.info(`\nConfiguration saved to ${CONFIG_FILE}`);
 
     if (config.active) {
-      installCron(config.cronFrequency, config.nodePath);
+      installCron(config.cronFrequency, config.nodePath, config.debugMode);
       logger.info(`Cron job installed (${config.cronFrequency})`);
     } else {
       removeCron();
@@ -108,6 +115,7 @@ program
   .option('--node-path <path>', 'Set Node.js binary path used by cron')
   .option('--cron-frequency <expr>', 'Set cron frequency expression')
   .option('--computer-name <name>', 'Set the computer name added to zip filenames')
+  .option('--debug-mode <bool>', 'Enable or disable debug mode for cron runs (true/false)')
   .option('--active <bool>', 'Enable or disable automatic backups (true/false)')
   .action((options) => {
     const config = loadConfig();
@@ -137,6 +145,10 @@ program
       config.computerName = options.computerName as string;
       changed = true;
     }
+    if (options.debugMode !== undefined) {
+      config.debugMode = options.debugMode === 'true';
+      changed = true;
+    }
     if (options.active !== undefined) {
       config.active = options.active === 'true';
       changed = true;
@@ -147,7 +159,7 @@ program
       logger.info(`Configuration updated (${CONFIG_FILE})`);
 
       if (config.active) {
-        installCron(config.cronFrequency, config.nodePath);
+        installCron(config.cronFrequency, config.nodePath, config.debugMode);
         logger.info(`Cron job updated (${config.cronFrequency})`);
       } else {
         removeCron();
@@ -163,6 +175,7 @@ program
         ['Node path', config.nodePath],
         ['Cron frequency', config.cronFrequency],
         ['Computer name', config.computerName],
+        ['Debug mode', String(config.debugMode)],
         ['Active', String(config.active)],
         ['Config file', CONFIG_FILE],
       ];
@@ -199,7 +212,7 @@ program
     const config = loadConfig();
     config.active = true;
     saveConfig(config);
-    installCron(config.cronFrequency, config.nodePath);
+    installCron(config.cronFrequency, config.nodePath, config.debugMode);
     logger.info(`Automatic backups activated (${config.cronFrequency})`);
   });
 
@@ -233,6 +246,7 @@ program
     logger.info(`  Projects path      : ${config.projectsPath}`);
     logger.info(`  Destination path   : ${config.destinationPath}`);
     logger.info(`  Computer name      : ${config.computerName}`);
+    logger.info(`  Debug mode         : ${config.debugMode ? 'enabled' : 'disabled'}`);
     logger.info(`  Node path          : ${config.nodePath}`);
     logger.info('');
   });

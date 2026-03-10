@@ -220,6 +220,7 @@ export async function runBackup(
     logger.debug('Another backup instance is already running. Skipping.');
     return;
   }
+  logger.debug('Acquired backup lock.');
 
   try {
     // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
