@@ -4,6 +4,7 @@ import os from 'os';
 import * as metadataModule from '../src/metadata';
 import * as loggerModule from '../src/logger';
 import * as throttleModule from '../src/throttle';
+import * as lockModule from '../src/lock';
 import logger from '../src/logger';
 import {
   expandPath,
@@ -239,6 +240,8 @@ describe('runBackup', () => {
     jest.spyOn(metadataModule, 'saveMetadata').mockImplementation(() => {});
     jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: false });
     jest.spyOn(throttleModule, 'setLastRun').mockImplementation(() => {});
+    jest.spyOn(lockModule, 'acquireLock').mockReturnValue(true);
+    jest.spyOn(lockModule, 'releaseLock').mockImplementation(() => {});
     logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
   });
 
