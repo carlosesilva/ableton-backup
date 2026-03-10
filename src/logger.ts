@@ -29,7 +29,18 @@ export function formatTimestampET(): string {
 
 /** Returns a date formatted as 'YYYY-MM-DD' in ET for any given Date. */
 export function toETDateString(date: Date): string {
-  return date.toLocaleDateString('en-CA', { timeZone: TZ });
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string): string => {
+    const part = parts.find((p) => p.type === type);
+    if (!part) throw new Error(`Intl.DateTimeFormat did not produce a '${type}' part`);
+    return part.value;
+  };
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 /** Returns the current date formatted as 'YYYY-MM-DD' in ET. */
