@@ -181,8 +181,8 @@ program
   .option('--dry-run', 'Show which projects would be backed up without writing files')
   .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
-    logger.info('Running backup cycle...');
     const dryRun = options.dryRun ?? false;
+    logger.info(`Running backup cycle${dryRun ? ' (dry run)' : ''}...`);
     const result = await runBackup(config, { dryRun });
 
     if (result.error) {
@@ -195,13 +195,13 @@ program
     } else {
       for (const name of result.backed) {
         if (dryRun) {
-          logger.info(`  Would back up: ${name}`);
+          logger.info(`\tWould back up: ${name}`);
         } else {
-          logger.info(`  Backed up: ${name}`);
+          logger.info(`\tBacked up: ${name}`);
         }
       }
       for (const name of result.skipped) {
-        logger.info(`  No changes: ${name}`);
+        logger.info(`\tNo changes: ${name}`);
       }
     }
   });
