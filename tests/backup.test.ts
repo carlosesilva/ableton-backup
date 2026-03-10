@@ -328,7 +328,7 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: no changes since last backup.');
+    expect(logSpy).toHaveBeenCalledWith('\tSkipping: no changes since last backup.');
   });
 
   test('logs backing up and backed up messages for a modified project', async () => {
@@ -346,8 +346,8 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(logSpy).toHaveBeenCalledWith('Backing up My Song...');
-    const backedUpCall = findLogCall(logSpy, 'Backed up My Song to ');
+    expect(logSpy).toHaveBeenCalledWith('\tBacking up...');
+    const backedUpCall = findLogCall(logSpy, '\tBacked up to ');
     expect(backedUpCall).toBeDefined();
   });
 
@@ -364,9 +364,9 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
 
-    const dryRunCall = findLogCall(logSpy, '[Dry run] Would back up My Song to ');
+    const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
     expect(dryRunCall).toBeDefined();
-    expect(logSpy).not.toHaveBeenCalledWith('Backing up My Song...');
+    expect(logSpy).not.toHaveBeenCalledWith('\tBacking up...');
   });
 
   test('logs final summary with backed and skipped counts', async () => {
@@ -394,7 +394,7 @@ describe('runBackup', () => {
 
     expect(result.skipped).toContain('My Song');
     expect(result.backed).not.toContain('My Song');
-    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: updated less than 30 minutes ago.');
+    expect(logSpy).toHaveBeenCalledWith('\tSkipping: updated less than 30 minutes ago.');
   });
 
   test('backs up project updated more than 30 minutes ago', async () => {
@@ -414,7 +414,7 @@ describe('runBackup', () => {
 
     expect(result.backed).toContain('My Song');
     expect(result.skipped).not.toContain('My Song');
-    expect(logSpy).not.toHaveBeenCalledWith('Skipping My Song: updated less than 30 minutes ago.');
+    expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: updated less than 30 minutes ago.');
   });
 
   test('skips project already backed up today', async () => {
@@ -445,7 +445,7 @@ describe('runBackup', () => {
 
     expect(result.skipped).toContain('My Song');
     expect(result.backed).not.toContain('My Song');
-    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: already backed up today.');
+    expect(logSpy).toHaveBeenCalledWith('\tSkipping: already backed up today.');
   });
 
   test('skips project modified today when hour is before NIGHT_HOUR', async () => {
@@ -473,7 +473,7 @@ describe('runBackup', () => {
     expect(result.skipped).toContain('My Song');
     expect(result.backed).not.toContain('My Song');
     expect(logSpy).toHaveBeenCalledWith(
-      'Skipping My Song: modified today, waiting until 11 PM ET to back up.'
+      '\tSkipping: modified today, waiting until 11 PM ET to back up.'
     );
   });
 
@@ -501,7 +501,7 @@ describe('runBackup', () => {
     expect(result.backed).toContain('My Song');
     expect(result.skipped).not.toContain('My Song');
     expect(logSpy).not.toHaveBeenCalledWith(
-      'Skipping My Song: modified today, waiting until 11 PM ET to back up.'
+      '\tSkipping: modified today, waiting until 11 PM ET to back up.'
     );
   });
 
@@ -549,7 +549,7 @@ describe('runBackup', () => {
     // Only the throttle message should be logged
     expect(logSpy).toHaveBeenCalledTimes(1);
     const [msg] = logSpy.mock.calls[0] as [string];
-    expect(msg).toMatch(/^Throttled until /);
+    expect(msg).toMatch(/^Backup run throttled until /);
   });
 
   test('does not throttle dry runs', async () => {
