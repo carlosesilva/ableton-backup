@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import * as metadataModule from '../src/metadata';
 import * as loggerModule from '../src/logger';
+import * as throttleModule from '../src/throttle';
 import logger from '../src/logger';
 import {
   expandPath,
@@ -190,6 +191,8 @@ describe('runBackup', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-runbackup-test-'));
     jest.spyOn(metadataModule, 'loadMetadata').mockReturnValue({ projects: {} });
     jest.spyOn(metadataModule, 'saveMetadata').mockImplementation(() => {});
+    jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: false });
+    jest.spyOn(throttleModule, 'setLastRun').mockImplementation(() => {});
     logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
   });
 
@@ -528,6 +531,54 @@ describe('runBackup', () => {
 
     expect(result.backed).toContain('My Song');
     expect(result.skipped).not.toContain('My Song');
+  });
+
+  test('returns early and logs throttle message when throttled', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const until = new Date('2026-03-10T19:04:12.000Z'); // fixed date for determinism
+    jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: true, until });
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir }));
+
+    expect(result.skipped).toEqual([]);
+    expect(result.backed).toEqual([]);
+    expect(result.error).toBeUndefined();
+    // Only the throttle message should be logged
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const [msg] = logSpy.mock.calls[0] as [string];
+    expect(msg).toMatch(/^Throttled until /);
+  });
+
+  test('does not throttle dry runs', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const until = new Date(Date.now() + 5 * 60 * 1000);
+    jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: true, until });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run)...');
+  });
+
+  test('records run time via setLastRun when not throttled', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }));
+
+    expect(throttleModule.setLastRun).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not call setLastRun for dry runs', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    expect(throttleModule.setLastRun).not.toHaveBeenCalled();
   });
 });
 

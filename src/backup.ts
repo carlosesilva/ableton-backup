@@ -13,7 +13,8 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
-import logger, { getETDateString, toETDateString, getETHour } from './logger';
+import logger, { getETDateString, toETDateString, getETHour, toETTimestampString } from './logger';
+import { checkThrottle, setLastRun } from './throttle';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -198,6 +199,16 @@ export async function runBackup(
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
+  // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
+  if (!dryRun) {
+    const throttleState = checkThrottle();
+    if (throttleState.throttled && throttleState.until) {
+      logger.info(`Throttled until ${toETTimestampString(throttleState.until)}`);
+      return { skipped: [], backed: [] };
+    }
+    setLastRun(new Date());
+  }
+
   logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
 
   const matchedProcesses = isAbletonRunning(cfg.abletonPath);
@@ -239,7 +250,7 @@ export async function runBackup(
     if (existing) {
       const lastModified = new Date(existing.lastModified);
       if (mtime <= lastModified) {
-        logger.info(`\tSkipping: no changes since last backup.`);
+        logger.info(`Skipping ${projectName}: no changes since last backup.`);
         skipped.push(projectName);
         continue;
       }
@@ -247,7 +258,7 @@ export async function runBackup(
 
     const now = new Date();
     if (now.getTime() - mtime.getTime() < BUFFER_MS) {
-      logger.info(`\tSkipping: updated less than 30 minutes ago.`);
+      logger.info(`Skipping ${projectName}: updated less than 30 minutes ago.`);
       skipped.push(projectName);
       continue;
     }
@@ -255,14 +266,14 @@ export async function runBackup(
     // Skip if already backed up today (once-per-day limit).
     const todayET = getETDateString();
     if (existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
-      logger.info(`\tSkipping: already backed up today.`);
+      logger.info(`Skipping ${projectName}: already backed up today.`);
       skipped.push(projectName);
       continue;
     }
 
     // If the project was last modified today, wait until 11 PM ET before backing up.
     if (toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
-      logger.info(`\tSkipping: modified today, waiting until 11 PM ET to back up.`);
+      logger.info(`Skipping ${projectName}: modified today, waiting until 11 PM ET to back up.`);
       skipped.push(projectName);
       continue;
     }
@@ -272,19 +283,19 @@ export async function runBackup(
     const outputPath = path.join(projectBackupDir, archiveName);
 
     if (dryRun) {
-      logger.info(`\t[Dry run] Would back up ${projectName} to ${outputPath}`);
+      logger.info(`[Dry run] Would back up ${projectName} to ${outputPath}`);
       backed.push(projectName);
       continue;
     }
 
-    logger.info(`\tBacking up...`);
+    logger.info(`Backing up ${projectName}...`);
 
     if (!fs.existsSync(projectBackupDir)) {
       fs.mkdirSync(projectBackupDir, { recursive: true });
     }
 
     await zipDirectory(projectPath, outputPath);
-    logger.info(`\tBacked up to ${outputPath}`);
+    logger.info(`Backed up ${projectName} to ${outputPath}`);
 
     setProjectMetadata(metadata, projectPath, {
       lastBackup: now.toISOString(),

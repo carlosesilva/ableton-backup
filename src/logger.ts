@@ -7,8 +7,8 @@ export const LOG_FILE = path.join(CONFIG_DIR, 'backup.log');
 
 const TZ = 'America/New_York';
 
-/** Returns the current date/time formatted as 'YYYY-MM-DD HH:mm:ss' in ET. */
-export function formatTimestampET(): string {
+/** Returns any date formatted as 'YYYY-MM-DD HH:mm:ss' in ET. */
+export function toETTimestampString(date: Date): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ,
     year: 'numeric',
@@ -18,13 +18,18 @@ export function formatTimestampET(): string {
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(date);
   const get = (type: string): string => {
     const part = parts.find((p) => p.type === type);
     if (!part) throw new Error(`Intl.DateTimeFormat did not produce a '${type}' part`);
     return part.value;
   };
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
+/** Returns the current date/time formatted as 'YYYY-MM-DD HH:mm:ss' in ET. */
+export function formatTimestampET(): string {
+  return toETTimestampString(new Date());
 }
 
 /** Returns a date formatted as 'YYYY-MM-DD' in ET for any given Date. */
