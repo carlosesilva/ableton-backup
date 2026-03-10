@@ -46,6 +46,9 @@ export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
 // Backups are preferred at or after this hour in ET (23 = 11 PM).
 export const NIGHT_HOUR = 23;
 
+// How often (in ms) to emit a heartbeat log while a zip archive is being created.
+export const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 seconds
+
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
     // Includes helper processes under the same app bundle path.
@@ -130,14 +133,26 @@ export function getDirectoryMtime(dirPath: string): Date {
 /**
  * Create a zip archive of the given source directory at the given output path.
  * Returns a Promise that resolves when the archive is complete.
+ * Periodically emits a heartbeat log so the caller knows archiving is still in progress.
  */
 export function zipDirectory(sourceDir: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath);
     const archive = archiver('zip', { zlib: { level: 9 } });
 
-    output.on('close', resolve);
-    archive.on('error', reject);
+    const heartbeat = setInterval(() => {
+      logger.info('\tStill archiving...');
+    }, HEARTBEAT_INTERVAL_MS);
+
+    output.on('close', () => {
+      clearInterval(heartbeat);
+      resolve();
+    });
+
+    archive.on('error', (err) => {
+      clearInterval(heartbeat);
+      reject(err);
+    });
 
     archive.pipe(output);
     archive.directory(sourceDir, path.basename(sourceDir));
