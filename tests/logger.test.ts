@@ -1,7 +1,7 @@
 import os from 'os';
 import path from 'path';
 import { transports as winstonTransports, format as winstonFormat } from 'winston';
-import { LOG_FILE } from '../src/logger';
+import { LOG_FILE, formatTimestampET, getETDateString } from '../src/logger';
 import logger from '../src/logger';
 import { CONFIG_DIR } from '../src/config';
 
@@ -44,8 +44,8 @@ describe('logger', () => {
     // Verify the logger's combined format by running a sample info object through it.
     // printf stores its output in info[MESSAGE] (the logform MESSAGE symbol).
     const info = winstonFormat.combine(
-      // Use the same settings as the logger to produce a known output
-      winstonFormat.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      // Use a function (as in the logger) to supply a fixed timestamp.
+      winstonFormat.timestamp({ format: () => '2024-01-15 10:30:00' }),
       winstonFormat.printf(({ timestamp, level, message }) => `${timestamp} ${level}: ${message}`)
     ).transform({ level: 'info', message: 'hello', [Symbol.for('level')]: 'info' }, {});
 
@@ -53,5 +53,20 @@ describe('logger', () => {
     const output = (info as Record<symbol, string>)[MESSAGE];
     // Should match "YYYY-MM-DD HH:mm:ss info: hello"
     expect(output).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} info: hello/);
+  });
+
+  test('formatTimestampET returns a string matching YYYY-MM-DD HH:mm:ss', () => {
+    const ts = formatTimestampET();
+    expect(ts).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  test('getETDateString returns a string matching YYYY-MM-DD', () => {
+    const d = getETDateString();
+    expect(d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('getETDateString matches the date in America/New_York timezone', () => {
+    const expected = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    expect(getETDateString()).toBe(expected);
   });
 });
