@@ -11,6 +11,7 @@ import {
   zipDirectory,
   isAbletonRunning,
   runBackup,
+  BUFFER_MS,
 } from '../src/backup';
 
 describe('expandPath', () => {
@@ -178,6 +179,7 @@ describe('zipDirectory', () => {
 describe('runBackup', () => {
   let tmpDir: string;
   let logSpy: jest.SpyInstance;
+  const ONE_MINUTE_MS = 60_000;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-runbackup-test-'));
@@ -219,7 +221,10 @@ describe('runBackup', () => {
     const projectName = 'My Song';
     const projectDir = path.join(projectsDir, projectName);
     fs.mkdirSync(projectDir);
-    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
 
     const config = {
       abletonPath: '/nonexistent/Ableton.app',
@@ -307,7 +312,7 @@ describe('runBackup', () => {
     fs.mkdirSync(projectDir);
     fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
 
-    const futureDate = new Date(Date.now() + 60_000).toISOString();
+    const futureDate = new Date(Date.now() + ONE_MINUTE_MS).toISOString();
     jest.spyOn(metadataModule, 'getProjectMetadata').mockReturnValue({
       lastBackup: futureDate,
       lastModified: futureDate,
@@ -326,7 +331,10 @@ describe('runBackup', () => {
 
     const projectDir = path.join(projectsDir, 'My Song');
     fs.mkdirSync(projectDir);
-    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
@@ -341,7 +349,10 @@ describe('runBackup', () => {
 
     const projectDir = path.join(projectsDir, 'My Song');
     fs.mkdirSync(projectDir);
-    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
 
     await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
 
@@ -357,6 +368,45 @@ describe('runBackup', () => {
     await runBackup(makeConfig({ projectsPath: projectsDir }));
 
     expect(logSpy).toHaveBeenCalledWith('Backup complete. Backed up: 0, Skipped: 0.');
+  });
+
+  test('skips project updated less than 30 minutes ago', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    // mtime is very recent (< 30 min ago) -- leave the file as-is
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(result.skipped).toContain('My Song');
+    expect(result.backed).not.toContain('My Song');
+    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: updated less than 30 minutes ago.');
+  });
+
+  test('backs up project updated more than 30 minutes ago', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(result.backed).toContain('My Song');
+    expect(result.skipped).not.toContain('My Song');
+    expect(logSpy).not.toHaveBeenCalledWith('Skipping My Song: updated less than 30 minutes ago.');
   });
 });
 

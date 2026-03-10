@@ -40,6 +40,8 @@ export interface RunBackupOptions {
   dryRun?: boolean;
 }
 
+export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
     // Includes helper processes under the same app bundle path.
@@ -241,6 +243,11 @@ export async function runBackup(
     }
 
     const now = new Date();
+    if (now.getTime() - mtime.getTime() < BUFFER_MS) {
+      logger.info(`Skipping ${projectName}: updated less than 30 minutes ago.`);
+      skipped.push(projectName);
+      continue;
+    }
     const archiveName = buildArchiveName(projectName, now, cfg.computerName);
     const projectBackupDir = path.join(destination, projectName);
     const outputPath = path.join(projectBackupDir, archiveName);
