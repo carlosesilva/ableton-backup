@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as metadataModule from '../src/metadata';
+import logger from '../src/logger';
 import {
   expandPath,
   buildArchiveName,
@@ -176,17 +177,38 @@ describe('zipDirectory', () => {
 
 describe('runBackup', () => {
   let tmpDir: string;
+  let logSpy: jest.SpyInstance;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-runbackup-test-'));
     jest.spyOn(metadataModule, 'loadMetadata').mockReturnValue({ projects: {} });
     jest.spyOn(metadataModule, 'saveMetadata').mockImplementation(() => {});
+    logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     jest.restoreAllMocks();
   });
+
+  function findLogCall(spy: jest.SpyInstance, prefix: string): unknown[] | undefined {
+    return spy.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).startsWith(prefix)
+    );
+  }
+
+  function makeConfig(overrides: Record<string, unknown> = {}) {
+    return {
+      abletonPath: '/nonexistent/Ableton.app',
+      projectsPath: path.join(tmpDir, 'projects'),
+      destinationPath: path.join(tmpDir, 'backups'),
+      nodePath: '/usr/bin/node',
+      cronFrequency: '0 * * * *',
+      active: false,
+      computerName: '',
+      ...overrides,
+    } as Parameters<typeof runBackup>[0];
+  }
 
   test('stores backup inside a project-named subdirectory', async () => {
     const projectsDir = path.join(tmpDir, 'projects');
@@ -222,6 +244,119 @@ describe('runBackup', () => {
     // Backup should NOT be placed directly in the destination root
     const rootFiles = fs.readdirSync(destDir).filter((f) => f.endsWith('.zip'));
     expect(rootFiles).toHaveLength(0);
+  });
+
+  test('logs "Starting backup cycle..." at the beginning', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }));
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle...');
+  });
+
+  test('logs "Starting backup cycle (dry run)..." for dry runs', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run)...');
+  });
+
+  test('logs that Ableton is not running before proceeding', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }));
+
+    expect(logSpy).toHaveBeenCalledWith('Ableton is not running. Proceeding with backup.');
+  });
+
+  test('logs project count after scanning', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    expect(logSpy).toHaveBeenCalledWith(`Found 1 project(s) in ${projectsDir}.`);
+  });
+
+  test('logs each project being checked', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Checking project: My Song');
+  });
+
+  test('logs skip message when project has not changed', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    const futureDate = new Date(Date.now() + 60_000).toISOString();
+    jest.spyOn(metadataModule, 'getProjectMetadata').mockReturnValue({
+      lastBackup: futureDate,
+      lastModified: futureDate,
+    });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: no changes since last backup.');
+  });
+
+  test('logs backing up and backed up messages for a modified project', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(logSpy).toHaveBeenCalledWith('Backing up My Song...');
+    const backedUpCall = findLogCall(logSpy, 'Backed up My Song to ');
+    expect(backedUpCall).toBeDefined();
+  });
+
+  test('logs dry-run would-back-up message instead of real backup messages', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'My Song.als'), '');
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
+
+    const dryRunCall = findLogCall(logSpy, '[Dry run] Would back up My Song to ');
+    expect(dryRunCall).toBeDefined();
+    expect(logSpy).not.toHaveBeenCalledWith('Backing up My Song...');
+  });
+
+  test('logs final summary with backed and skipped counts', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }));
+
+    expect(logSpy).toHaveBeenCalledWith('Backup complete. Backed up: 0, Skipped: 0.');
   });
 });
 
