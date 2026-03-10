@@ -39,6 +39,8 @@ export interface MatchedProcess {
 export interface RunBackupOptions {
   dryRun?: boolean;
 }
+// The buffer time is used to skip backing up projects that were modified very recently, which likely means the user is still working on them.
+export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
@@ -241,6 +243,11 @@ export async function runBackup(
     }
 
     const now = new Date();
+    if (now.getTime() - mtime.getTime() < BUFFER_MS) {
+      logger.info(`Skipping ${projectName}: updated less than 30 minutes ago.`);
+      skipped.push(projectName);
+      continue;
+    }
     const archiveName = buildArchiveName(projectName, now, cfg.computerName);
     const projectBackupDir = path.join(destination, projectName);
     const outputPath = path.join(projectBackupDir, archiveName);
