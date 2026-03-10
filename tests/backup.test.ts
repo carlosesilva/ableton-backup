@@ -4,6 +4,7 @@ import os from 'os';
 import * as metadataModule from '../src/metadata';
 import * as loggerModule from '../src/logger';
 import * as throttleModule from '../src/throttle';
+import * as lockModule from '../src/lock';
 import logger from '../src/logger';
 import {
   expandPath,
@@ -239,6 +240,8 @@ describe('runBackup', () => {
     jest.spyOn(metadataModule, 'saveMetadata').mockImplementation(() => {});
     jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: false });
     jest.spyOn(throttleModule, 'setLastRun').mockImplementation(() => {});
+    jest.spyOn(lockModule, 'acquireLock').mockReturnValue(true);
+    jest.spyOn(lockModule, 'releaseLock').mockImplementation(() => {});
     logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
   });
 
@@ -437,10 +440,8 @@ describe('runBackup', () => {
     fs.writeFileSync(alsFile, '');
     // mtime is very recent (< 30 min ago) -- leave the file as-is
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(result.skipped).toContain('My Song');
-    expect(result.backed).not.toContain('My Song');
     expect(logSpy).toHaveBeenCalledWith('\tSkipping: updated less than 30 minutes ago.');
   });
 
@@ -457,10 +458,9 @@ describe('runBackup', () => {
     const oldTime = new Date(Date.now() - YESTERDAY_MS);
     fs.utimesSync(alsFile, oldTime, oldTime);
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(result.backed).toContain('My Song');
-    expect(result.skipped).not.toContain('My Song');
+    expect(logSpy).toHaveBeenCalledWith('\tBacking up...');
     expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: updated less than 30 minutes ago.');
   });
 
@@ -488,10 +488,8 @@ describe('runBackup', () => {
       lastModified: beforeMtime,
     });
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(result.skipped).toContain('My Song');
-    expect(result.backed).not.toContain('My Song');
     expect(logSpy).toHaveBeenCalledWith('\tSkipping: already backed up today.');
   });
 
@@ -515,10 +513,8 @@ describe('runBackup', () => {
     jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(today);
     jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR - 1);
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(result.skipped).toContain('My Song');
-    expect(result.backed).not.toContain('My Song');
     expect(logSpy).toHaveBeenCalledWith(
       '\tSkipping: modified today, waiting until 11 PM ET to back up.'
     );
@@ -543,10 +539,10 @@ describe('runBackup', () => {
     jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(today);
     jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR);
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
 
-    expect(result.backed).toContain('My Song');
-    expect(result.skipped).not.toContain('My Song');
+    const dryRunBackupCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunBackupCall).toBeDefined();
     expect(logSpy).not.toHaveBeenCalledWith(
       '\tSkipping: modified today, waiting until 11 PM ET to back up.'
     );
@@ -574,10 +570,11 @@ describe('runBackup', () => {
     jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(yesterday);
     jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR - 10); // early morning
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
+    await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
 
-    expect(result.backed).toContain('My Song');
-    expect(result.skipped).not.toContain('My Song');
+    const dryRunBackupCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunBackupCall).toBeDefined();
+    expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: modified today, waiting until 11 PM ET to back up.');
   });
 
   test('returns early and logs throttle message when throttled', async () => {
@@ -586,16 +583,15 @@ describe('runBackup', () => {
 
     const until = new Date('2026-03-10T19:04:12.000Z'); // fixed date for determinism
     jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: true, until });
+    const debugSpy = jest.spyOn(logger, 'debug').mockImplementation(() => logger);
 
-    const result = await runBackup(makeConfig({ projectsPath: projectsDir }));
+    await runBackup(makeConfig({ projectsPath: projectsDir }));
 
-    expect(result.skipped).toEqual([]);
-    expect(result.backed).toEqual([]);
-    expect(result.throttled).toBe(true);
-    expect(result.error).toBeUndefined();
-    // Only the throttle message should be logged
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    const [msg] = logSpy.mock.calls[0] as [string];
+    // No backup cycle should have started
+    expect(logSpy).not.toHaveBeenCalledWith('Starting backup cycle...');
+    // Throttle message should be logged at debug level
+    expect(debugSpy).toHaveBeenCalledTimes(1);
+    const [msg] = debugSpy.mock.calls[0] as unknown as [string];
     expect(msg).toMatch(/^Backup run throttled until /);
   });
 

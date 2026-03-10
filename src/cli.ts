@@ -182,34 +182,11 @@ program
   .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
     const dryRun = options.dryRun ?? false;
-    const result = await runBackup(config, { dryRun });
-
-    if (result.throttled) {
-      return;
-    }
-
-    if (result.locked) {
-      return;
-    }
-
-    if (result.error) {
-      logger.warn(`${result.error}`);
-      process.exit(0);
-    }
-
-    if (result.backed.length === 0 && result.skipped.length === 0) {
-      logger.warn('No Ableton projects found.');
-    } else {
-      for (const name of result.backed) {
-        if (dryRun) {
-          logger.info(`\tWould back up: ${name}`);
-        } else {
-          logger.info(`\tBacked up: ${name}`);
-        }
-      }
-      for (const name of result.skipped) {
-        logger.info(`\tNo changes: ${name}`);
-      }
+    try {
+      await runBackup(config, { dryRun });
+    } catch (err) {
+      logger.error(`Backup run failed: ${(err as Error).message}`);
+      process.exit(1);
     }
   });
 
