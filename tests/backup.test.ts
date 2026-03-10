@@ -291,6 +291,7 @@ describe('runBackup', () => {
       cronFrequency: '0 * * * *',
       active: false,
       computerName: '',
+      debugMode: false,
     };
 
     await runBackup(config);
@@ -395,8 +396,7 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    const backingUpCall = findLogCall(logSpy, '\tBacking up to ');
-    expect(backingUpCall).toBeDefined();
+    expect(logSpy).toHaveBeenCalledWith('\tBacking up...');
     const backedUpCall = findLogCall(logSpy, '\tBacked up to ');
     expect(backedUpCall).toBeDefined();
   });
@@ -590,9 +590,7 @@ describe('runBackup', () => {
     // No backup cycle should have started
     expect(logSpy).not.toHaveBeenCalledWith('Starting backup cycle...');
     // Throttle message should be logged at debug level
-    expect(debugSpy).toHaveBeenCalledTimes(1);
-    const [msg] = debugSpy.mock.calls[0] as unknown as [string];
-    expect(msg).toMatch(/^Backup run throttled until /);
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringMatching(/^Backup run throttled until /));
   });
 
   test('does not throttle dry runs', async () => {

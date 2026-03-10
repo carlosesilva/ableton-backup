@@ -311,13 +311,29 @@ export async function runBackup(
         continue;
       }
 
-      logger.info(`\tBacking up to ${outputPath}...`);
+      logger.info(`\tBacking up...`);
 
       if (!fs.existsSync(projectBackupDir)) {
         fs.mkdirSync(projectBackupDir, { recursive: true });
       }
 
-      await zipDirectory(projectPath, outputPath);
+      // Archive to a local temp file first to avoid writing directly to a
+      // potentially slow destination (e.g. Google Drive), then move it over.
+      // Prefix with the process PID to avoid collisions if multiple instances run.
+      const tmpOutputPath = path.join(os.tmpdir(), `${process.pid}-${archiveName}`);
+      await zipDirectory(projectPath, tmpOutputPath);
+      try {
+        fs.renameSync(tmpOutputPath, outputPath);
+      } catch (renameErr) {
+        if ((renameErr as NodeJS.ErrnoException).code === 'EXDEV') {
+          // renameSync cannot cross filesystem boundaries; fall back to copy + delete.
+          fs.copyFileSync(tmpOutputPath, outputPath);
+          fs.unlinkSync(tmpOutputPath);
+        } else {
+          fs.unlinkSync(tmpOutputPath);
+          throw renameErr;
+        }
+      }
       logger.info(`\tBacked up to ${outputPath}`);
 
       setProjectMetadata(metadata, projectPath, {
