@@ -211,26 +211,26 @@ export function findProjects(projectsPath: string): string[] {
 export async function runBackup(
   config?: Config,
   options?: RunBackupOptions
-): Promise<{ skipped: string[]; backed: string[]; error?: string; throttled?: boolean; locked?: boolean }> {
+): Promise<void> {
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
-  // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
-  if (!dryRun) {
-    const throttleState = checkThrottle();
-    if (throttleState.throttled && throttleState.until) {
-      logger.info(`Backup run throttled until ${toETTimestampString(throttleState.until)}`);
-      return { skipped: [], backed: [], throttled: true };
-    }
-
-    // Ensure only one backup instance runs at a time.
-    if (!acquireLock()) {
-      logger.info('Another backup instance is already running. Skipping.');
-      return { skipped: [], backed: [], locked: true };
-    }
+  // Ensure only one backup instance runs at a time.
+  if (!acquireLock()) {
+    logger.debug('Another backup instance is already running. Skipping.');
+    return;
   }
 
   try {
+    // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
+    if (!dryRun) {
+      const throttleState = checkThrottle();
+      if (throttleState.throttled && throttleState.until) {
+        logger.debug(`Backup run throttled until ${toETTimestampString(throttleState.until)}`);
+        return;
+      }
+    }
+
     if (!dryRun) {
       setLastRun(new Date());
     }
@@ -245,11 +245,7 @@ export async function runBackup(
         );
       }
 
-      return {
-        skipped: [],
-        backed: [],
-        error: 'Ableton Live is currently running. Skipping backup.',
-      };
+      return;
     }
 
     logger.info('Ableton is not running. Proceeding with backup.');
@@ -339,10 +335,9 @@ export async function runBackup(
       `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
     );
 
-    return { skipped, backed };
+    return;
+
   } finally {
-    if (!dryRun) {
-      releaseLock();
-    }
+    releaseLock();
   }
 }
