@@ -314,7 +314,7 @@ export async function runBackup(
         continue;
       }
 
-      logger.info(`\tBacking up...`);
+      logger.info(`\tBacking up to ${outputPath}...`);
 
       if (!fs.existsSync(projectBackupDir)) {
         fs.mkdirSync(projectBackupDir, { recursive: true });

@@ -392,7 +392,8 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
 
-    expect(logSpy).toHaveBeenCalledWith('\tBacking up...');
+    const backingUpCall = findLogCall(logSpy, '\tBacking up to ');
+    expect(backingUpCall).toBeDefined();
     const backedUpCall = findLogCall(logSpy, '\tBacked up to ');
     expect(backedUpCall).toBeDefined();
   });
