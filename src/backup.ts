@@ -13,7 +13,8 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
-import logger, { getETDateString, toETDateString, getETHour } from './logger';
+import logger, { getETDateString, toETDateString, getETHour, toETTimestampString } from './logger';
+import { checkThrottle, setLastRun } from './throttle';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -194,9 +195,19 @@ export function findProjects(projectsPath: string): string[] {
 export async function runBackup(
   config?: Config,
   options?: RunBackupOptions
-): Promise<{ skipped: string[]; backed: string[]; error?: string }> {
+): Promise<{ skipped: string[]; backed: string[]; error?: string; throttled?: boolean }> {
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
+
+  // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
+  if (!dryRun) {
+    const throttleState = checkThrottle();
+    if (throttleState.throttled && throttleState.until) {
+      logger.info(`Backup run throttled until ${toETTimestampString(throttleState.until)}`);
+      return { skipped: [], backed: [], throttled: true };
+    }
+    setLastRun(new Date());
+  }
 
   logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
 

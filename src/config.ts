@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG: Config = {
   projectsPath: path.join(os.homedir(), 'Music', 'Ableton'),
   destinationPath: path.join(os.homedir(), 'Documents', 'Ableton Backups'),
   nodePath: '~/.local/share/mise/shims/node',
-  cronFrequency: '0 * * * *',
+  cronFrequency: '* * * * *',
   active: false,
   computerName: os.hostname(),
 };
