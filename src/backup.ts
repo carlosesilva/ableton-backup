@@ -15,6 +15,7 @@ import {
 } from './metadata';
 import logger, { getETDateString, toETDateString, getETHour, toETTimestampString } from './logger';
 import { checkThrottle, setLastRun } from './throttle';
+import { acquireLock, releaseLock } from './lock';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -195,7 +196,7 @@ export function findProjects(projectsPath: string): string[] {
 export async function runBackup(
   config?: Config,
   options?: RunBackupOptions
-): Promise<{ skipped: string[]; backed: string[]; error?: string; throttled?: boolean }> {
+): Promise<{ skipped: string[]; backed: string[]; error?: string; throttled?: boolean; locked?: boolean }> {
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
@@ -206,112 +207,127 @@ export async function runBackup(
       logger.info(`Backup run throttled until ${toETTimestampString(throttleState.until)}`);
       return { skipped: [], backed: [], throttled: true };
     }
-    setLastRun(new Date());
+
+    // Ensure only one backup instance runs at a time.
+    if (!acquireLock()) {
+      logger.info('Another backup instance is already running. Skipping.');
+      return { skipped: [], backed: [], locked: true };
+    }
   }
 
-  logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
-
-  const matchedProcesses = isAbletonRunning(cfg.abletonPath);
-  if (matchedProcesses.length > 0) {
-    for (const process of matchedProcesses) {
-      logger.info(
-        `Matched Ableton process: pid=${process.pid} user=${process.user} command=${process.command}`
-      );
+  try {
+    if (!dryRun) {
+      setLastRun(new Date());
     }
 
-    return {
-      skipped: [],
-      backed: [],
-      error: 'Ableton Live is currently running. Skipping backup.',
-    };
-  }
+    logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
 
-  logger.info('Ableton is not running. Proceeding with backup.');
+    const matchedProcesses = isAbletonRunning(cfg.abletonPath);
+    if (matchedProcesses.length > 0) {
+      for (const process of matchedProcesses) {
+        logger.info(
+          `Matched Ableton process: pid=${process.pid} user=${process.user} command=${process.command}`
+        );
+      }
 
-  const destination = expandPath(cfg.destinationPath);
-  if (!dryRun && !fs.existsSync(destination)) {
-    fs.mkdirSync(destination, { recursive: true });
-  }
+      return {
+        skipped: [],
+        backed: [],
+        error: 'Ableton Live is currently running. Skipping backup.',
+      };
+    }
 
-  const metadata = loadMetadata();
-  const projects = findProjects(cfg.projectsPath);
-  logger.info(`Found ${projects.length} project(s) in ${cfg.projectsPath}.`);
+    logger.info('Ableton is not running. Proceeding with backup.');
 
-  const skipped: string[] = [];
-  const backed: string[] = [];
+    const destination = expandPath(cfg.destinationPath);
+    if (!dryRun && !fs.existsSync(destination)) {
+      fs.mkdirSync(destination, { recursive: true });
+    }
 
-  for (const projectPath of projects) {
-    const projectName = path.basename(projectPath);
-    logger.info(`Checking project: ${projectName}`);
+    const metadata = loadMetadata();
+    const projects = findProjects(cfg.projectsPath);
+    logger.info(`Found ${projects.length} project(s) in ${cfg.projectsPath}.`);
 
-    const mtime = getDirectoryMtime(projectPath);
-    const existing = getProjectMetadata(metadata, projectPath);
+    const skipped: string[] = [];
+    const backed: string[] = [];
 
-    if (existing) {
-      const lastModified = new Date(existing.lastModified);
-      if (mtime <= lastModified) {
-        logger.info(`\tSkipping: no changes since last backup.`);
+    for (const projectPath of projects) {
+      const projectName = path.basename(projectPath);
+      logger.info(`Checking project: ${projectName}`);
+
+      const mtime = getDirectoryMtime(projectPath);
+      const existing = getProjectMetadata(metadata, projectPath);
+
+      if (existing) {
+        const lastModified = new Date(existing.lastModified);
+        if (mtime <= lastModified) {
+          logger.info(`\tSkipping: no changes since last backup.`);
+          skipped.push(projectName);
+          continue;
+        }
+      }
+
+      const now = new Date();
+      if (now.getTime() - mtime.getTime() < BUFFER_MS) {
+        logger.info(`\tSkipping: updated less than 30 minutes ago.`);
         skipped.push(projectName);
         continue;
       }
-    }
 
-    const now = new Date();
-    if (now.getTime() - mtime.getTime() < BUFFER_MS) {
-      logger.info(`\tSkipping: updated less than 30 minutes ago.`);
-      skipped.push(projectName);
-      continue;
-    }
+      // Skip if already backed up today (once-per-day limit).
+      const todayET = getETDateString();
+      if (existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
+        logger.info(`\tSkipping: already backed up today.`);
+        skipped.push(projectName);
+        continue;
+      }
 
-    // Skip if already backed up today (once-per-day limit).
-    const todayET = getETDateString();
-    if (existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
-      logger.info(`\tSkipping: already backed up today.`);
-      skipped.push(projectName);
-      continue;
-    }
+      // If the project was last modified today, wait until 11 PM ET before backing up.
+      if (toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
+        logger.info(`\tSkipping: modified today, waiting until 11 PM ET to back up.`);
+        skipped.push(projectName);
+        continue;
+      }
 
-    // If the project was last modified today, wait until 11 PM ET before backing up.
-    if (toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
-      logger.info(`\tSkipping: modified today, waiting until 11 PM ET to back up.`);
-      skipped.push(projectName);
-      continue;
-    }
+      const archiveName = buildArchiveName(projectName, now, cfg.computerName);
+      const projectBackupDir = path.join(destination, projectName);
+      const outputPath = path.join(projectBackupDir, archiveName);
 
-    const archiveName = buildArchiveName(projectName, now, cfg.computerName);
-    const projectBackupDir = path.join(destination, projectName);
-    const outputPath = path.join(projectBackupDir, archiveName);
+      if (dryRun) {
+        logger.info(`\t[Dry run] Would back up ${projectName} to ${outputPath}`);
+        backed.push(projectName);
+        continue;
+      }
 
-    if (dryRun) {
-      logger.info(`\t[Dry run] Would back up ${projectName} to ${outputPath}`);
+      logger.info(`\tBacking up...`);
+
+      if (!fs.existsSync(projectBackupDir)) {
+        fs.mkdirSync(projectBackupDir, { recursive: true });
+      }
+
+      await zipDirectory(projectPath, outputPath);
+      logger.info(`\tBacked up to ${outputPath}`);
+
+      setProjectMetadata(metadata, projectPath, {
+        lastBackup: now.toISOString(),
+        lastModified: mtime.toISOString(),
+      });
+
       backed.push(projectName);
-      continue;
     }
 
-    logger.info(`\tBacking up...`);
-
-    if (!fs.existsSync(projectBackupDir)) {
-      fs.mkdirSync(projectBackupDir, { recursive: true });
+    if (!dryRun) {
+      saveMetadata(metadata);
     }
 
-    await zipDirectory(projectPath, outputPath);
-    logger.info(`\tBacked up to ${outputPath}`);
+    logger.info(
+      `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
+    );
 
-    setProjectMetadata(metadata, projectPath, {
-      lastBackup: now.toISOString(),
-      lastModified: mtime.toISOString(),
-    });
-
-    backed.push(projectName);
+    return { skipped, backed };
+  } finally {
+    if (!dryRun) {
+      releaseLock();
+    }
   }
-
-  if (!dryRun) {
-    saveMetadata(metadata);
-  }
-
-  logger.info(
-    `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
-  );
-
-  return { skipped, backed };
 }

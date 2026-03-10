@@ -188,6 +188,10 @@ program
       return;
     }
 
+    if (result.locked) {
+      return;
+    }
+
     if (result.error) {
       logger.warn(`${result.error}`);
       process.exit(0);
