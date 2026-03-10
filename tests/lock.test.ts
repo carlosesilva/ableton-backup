@@ -18,11 +18,17 @@ jest.mock('../src/config', () => {
 
 import {
   LOCK_FILE,
+  LOCK_EXPIRY_MS,
   getLockPid,
   acquireLock,
   releaseLock,
   isLocked,
 } from '../src/lock';
+
+/** Write a lock file with the given pid and acquiredAt timestamp. */
+function writeLock(pid: number, acquiredAt: Date): void {
+  fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid, acquiredAt: acquiredAt.toISOString() }), 'utf8');
+}
 
 afterAll(() => {
   fs.rmSync(TMP_DIR, { recursive: true, force: true });
@@ -33,17 +39,21 @@ describe('lock', () => {
     if (fs.existsSync(LOCK_FILE)) fs.unlinkSync(LOCK_FILE);
   });
 
+  test('LOCK_EXPIRY_MS is 1 hour in milliseconds', () => {
+    expect(LOCK_EXPIRY_MS).toBe(60 * 60 * 1000);
+  });
+
   test('getLockPid returns null when no file exists', () => {
     expect(getLockPid()).toBeNull();
   });
 
-  test('getLockPid returns the PID written to the lock file', () => {
-    fs.writeFileSync(LOCK_FILE, '12345', 'utf8');
+  test('getLockPid returns the PID stored in the lock file', () => {
+    writeLock(12345, new Date());
     expect(getLockPid()).toBe(12345);
   });
 
   test('getLockPid returns null for corrupt file content', () => {
-    fs.writeFileSync(LOCK_FILE, 'not-a-pid', 'utf8');
+    fs.writeFileSync(LOCK_FILE, 'not-json', 'utf8');
     expect(getLockPid()).toBeNull();
   });
 
@@ -53,18 +63,25 @@ describe('lock', () => {
     expect(getLockPid()).toBe(process.pid);
   });
 
-  test('acquireLock returns false when a live process holds the lock', () => {
-    // Write the current process's own PID – it is definitely alive.
-    fs.writeFileSync(LOCK_FILE, String(process.pid), 'utf8');
+  test('acquireLock returns false when a live, non-expired process holds the lock', () => {
+    // Write the current process's own PID with a fresh timestamp – it is definitely alive.
+    writeLock(process.pid, new Date());
     const acquired = acquireLock();
     expect(acquired).toBe(false);
   });
 
-  test('acquireLock clears a stale lock and acquires successfully', () => {
-    // PID 0 is never a valid user-space process, so kill(0, 0) will throw.
-    // Use a PID that is guaranteed to not be running: Number.MAX_SAFE_INTEGER.
-    const deadPid = 999999999;
-    fs.writeFileSync(LOCK_FILE, String(deadPid), 'utf8');
+  test('acquireLock clears a stale (dead process) lock and acquires successfully', () => {
+    // Use a PID that is guaranteed to not be running.
+    writeLock(999999999, new Date());
+    const acquired = acquireLock();
+    expect(acquired).toBe(true);
+    expect(getLockPid()).toBe(process.pid);
+  });
+
+  test('acquireLock clears an expired lock even when the PID is alive', () => {
+    // Lock held by current process but acquired more than LOCK_EXPIRY_MS ago.
+    const expired = new Date(Date.now() - LOCK_EXPIRY_MS - 1000);
+    writeLock(process.pid, expired);
     const acquired = acquireLock();
     expect(acquired).toBe(true);
     expect(getLockPid()).toBe(process.pid);
@@ -90,13 +107,19 @@ describe('lock', () => {
     expect(isLocked()).toBe(false);
   });
 
-  test('isLocked returns true when the current process holds the lock', () => {
-    fs.writeFileSync(LOCK_FILE, String(process.pid), 'utf8');
+  test('isLocked returns true when the current process holds a fresh lock', () => {
+    writeLock(process.pid, new Date());
     expect(isLocked()).toBe(true);
   });
 
-  test('isLocked returns false for a stale lock', () => {
-    fs.writeFileSync(LOCK_FILE, '999999999', 'utf8');
+  test('isLocked returns false for a stale (dead process) lock', () => {
+    writeLock(999999999, new Date());
+    expect(isLocked()).toBe(false);
+  });
+
+  test('isLocked returns false for an expired lock', () => {
+    const expired = new Date(Date.now() - LOCK_EXPIRY_MS - 1000);
+    writeLock(process.pid, expired);
     expect(isLocked()).toBe(false);
   });
 
@@ -106,3 +129,4 @@ describe('lock', () => {
     expect(isLocked()).toBe(false);
   });
 });
+
