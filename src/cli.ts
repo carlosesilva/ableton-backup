@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import inquirer from 'inquirer';
-import chalk from 'chalk';
 import {
   loadConfig,
   saveConfig,
@@ -29,7 +28,7 @@ program
   .action(async () => {
     const existing = configExists() ? loadConfig() : { ...DEFAULT_CONFIG };
 
-    logger.info(chalk.cyan('\n🎛  Ableton Backup – Setup\n'));
+    logger.info('\nAbleton Backup - Setup\n');
 
     const answers = await inquirer.prompt([
       {
@@ -87,14 +86,14 @@ program
     };
 
     saveConfig(config);
-    logger.info(chalk.green(`\n✅  Configuration saved to ${CONFIG_FILE}`));
+    logger.info(`\nConfiguration saved to ${CONFIG_FILE}`);
 
     if (config.active) {
       installCron(config.cronFrequency, config.nodePath);
-      logger.info(chalk.green(`✅  Cron job installed (${config.cronFrequency})`));
+      logger.info(`Cron job installed (${config.cronFrequency})`);
     } else {
       removeCron();
-      logger.warn(chalk.yellow('⚠️   Automatic backups are disabled.'));
+      logger.warn('Automatic backups are disabled.');
     }
   });
 
@@ -145,18 +144,18 @@ program
 
     if (changed) {
       saveConfig(config);
-      logger.info(chalk.green(`✅  Configuration updated (${CONFIG_FILE})`));
+      logger.info(`Configuration updated (${CONFIG_FILE})`);
 
       if (config.active) {
         installCron(config.cronFrequency, config.nodePath);
-        logger.info(chalk.green(`✅  Cron job updated (${config.cronFrequency})`));
+        logger.info(`Cron job updated (${config.cronFrequency})`);
       } else {
         removeCron();
-        logger.warn(chalk.yellow('⚠️   Automatic backups disabled.'));
+        logger.warn('Automatic backups disabled.');
       }
     } else {
       // Print current config
-      logger.info(chalk.cyan('\n📋  Current configuration:\n'));
+      logger.info('\nCurrent configuration:\n');
       const entries: [string, string][] = [
         ['Ableton path', config.abletonPath],
         ['Projects path', config.projectsPath],
@@ -168,7 +167,7 @@ program
         ['Config file', CONFIG_FILE],
       ];
       for (const [key, value] of entries) {
-        logger.info(`  ${chalk.bold(key.padEnd(20))} ${value}`);
+        logger.info(`  ${key.padEnd(20)} ${value}`);
       }
       logger.info('');
     }
@@ -182,27 +181,27 @@ program
   .option('--dry-run', 'Show which projects would be backed up without writing files')
   .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
-    logger.info(chalk.cyan('🔄  Running backup cycle…'));
+    logger.info('Running backup cycle...');
     const dryRun = options.dryRun ?? false;
     const result = await runBackup(config, { dryRun });
 
     if (result.error) {
-      logger.warn(chalk.yellow(`⚠️   ${result.error}`));
+      logger.warn(`${result.error}`);
       process.exit(0);
     }
 
     if (result.backed.length === 0 && result.skipped.length === 0) {
-      logger.warn(chalk.yellow('ℹ️   No Ableton projects found.'));
+      logger.warn('No Ableton projects found.');
     } else {
       for (const name of result.backed) {
         if (dryRun) {
-          logger.info(chalk.cyan(`  🔎  Would back up: ${name}`));
+          logger.info(`  Would back up: ${name}`);
         } else {
-          logger.info(chalk.green(`  ✅  Backed up: ${name}`));
+          logger.info(`  Backed up: ${name}`);
         }
       }
       for (const name of result.skipped) {
-        logger.info(chalk.gray(`  –  No changes: ${name}`));
+        logger.info(`  No changes: ${name}`);
       }
     }
   });
@@ -217,7 +216,7 @@ program
     config.active = true;
     saveConfig(config);
     installCron(config.cronFrequency, config.nodePath);
-    logger.info(chalk.green(`✅  Automatic backups activated (${config.cronFrequency})`));
+    logger.info(`Automatic backups activated (${config.cronFrequency})`);
   });
 
 // ─── stop ────────────────────────────────────────────────────────────────────
@@ -230,7 +229,7 @@ program
     config.active = false;
     saveConfig(config);
     removeCron();
-    logger.warn(chalk.yellow('⚠️   Automatic backups deactivated.'));
+    logger.warn('Automatic backups deactivated.');
   });
 
 // ─── status ──────────────────────────────────────────────────────────────────
@@ -242,9 +241,9 @@ program
     const config = loadConfig();
     const cronInstalled = isCronInstalled();
 
-    logger.info(chalk.cyan('\n📊  Ableton Backup – Status\n'));
-    logger.info(`  Config active flag : ${config.active ? chalk.green('enabled') : chalk.red('disabled')}`);
-    logger.info(`  Cron job installed : ${cronInstalled ? chalk.green('yes') : chalk.red('no')}`);
+    logger.info('\nAbleton Backup - Status\n');
+    logger.info(`  Config active flag : ${config.active ? 'enabled' : 'disabled'}`);
+    logger.info(`  Cron job installed : ${cronInstalled ? 'yes' : 'no'}`);
     logger.info(`  Cron frequency     : ${config.cronFrequency}`);
     logger.info(`  Ableton path       : ${config.abletonPath}`);
     logger.info(`  Projects path      : ${config.projectsPath}`);
