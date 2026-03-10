@@ -544,6 +544,7 @@ describe('runBackup', () => {
 
     expect(result.skipped).toEqual([]);
     expect(result.backed).toEqual([]);
+    expect(result.throttled).toBe(true);
     expect(result.error).toBeUndefined();
     // Only the throttle message should be logged
     expect(logSpy).toHaveBeenCalledTimes(1);

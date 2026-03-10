@@ -182,8 +182,11 @@ program
   .action(async (options: { dryRun?: boolean }) => {
     const config = loadConfig();
     const dryRun = options.dryRun ?? false;
-    logger.info(`Running backup cycle${dryRun ? ' (dry run)' : ''}...`);
     const result = await runBackup(config, { dryRun });
+
+    if (result.throttled) {
+      return;
+    }
 
     if (result.error) {
       logger.warn(`${result.error}`);

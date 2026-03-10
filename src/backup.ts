@@ -195,7 +195,7 @@ export function findProjects(projectsPath: string): string[] {
 export async function runBackup(
   config?: Config,
   options?: RunBackupOptions
-): Promise<{ skipped: string[]; backed: string[]; error?: string }> {
+): Promise<{ skipped: string[]; backed: string[]; error?: string; throttled?: boolean }> {
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
 
@@ -204,7 +204,7 @@ export async function runBackup(
     const throttleState = checkThrottle();
     if (throttleState.throttled && throttleState.until) {
       logger.info(`Throttled until ${toETTimestampString(throttleState.until)}`);
-      return { skipped: [], backed: [] };
+      return { skipped: [], backed: [], throttled: true };
     }
     setLastRun(new Date());
   }
