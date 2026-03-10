@@ -15,6 +15,7 @@ import {
   runBackup,
   BUFFER_MS,
   NIGHT_HOUR,
+  HEARTBEAT_INTERVAL_MS,
 } from '../src/backup';
 
 describe('expandPath', () => {
@@ -176,6 +177,51 @@ describe('zipDirectory', () => {
     expect(fs.existsSync(outputPath)).toBe(true);
     const stat = fs.statSync(outputPath);
     expect(stat.size).toBeGreaterThan(0);
+  });
+
+  test('logs heartbeat messages while archiving', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    const logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+
+    const srcDir = path.join(tmpDir, 'MyProject');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(path.join(srcDir, 'song.als'), 'ableton data');
+
+    const outputPath = path.join(tmpDir, 'output.zip');
+
+    // Start archiving, then advance fake timers past one heartbeat interval.
+    const zipPromise = zipDirectory(srcDir, outputPath);
+    jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+    await zipPromise;
+
+    expect(logSpy).toHaveBeenCalledWith('\tStill archiving...');
+
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  test('logs multiple heartbeat messages when archiving takes multiple intervals', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    const logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+
+    const srcDir = path.join(tmpDir, 'MyProject');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(path.join(srcDir, 'song.als'), 'ableton data');
+
+    const outputPath = path.join(tmpDir, 'output.zip');
+
+    // Start archiving and advance fake timers past two heartbeat intervals.
+    const zipPromise = zipDirectory(srcDir, outputPath);
+    jest.advanceTimersByTime(2 * HEARTBEAT_INTERVAL_MS);
+    await zipPromise;
+
+    const heartbeatCalls = logSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && call[0] === '\tStill archiving...'
+    );
+    expect(heartbeatCalls.length).toBe(2);
+
+    jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 });
 
