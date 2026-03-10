@@ -27,9 +27,27 @@ export function formatTimestampET(): string {
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+/** Returns a date formatted as 'YYYY-MM-DD' in ET for any given Date. */
+export function toETDateString(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: TZ });
+}
+
 /** Returns the current date formatted as 'YYYY-MM-DD' in ET. */
 export function getETDateString(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  return toETDateString(new Date());
+}
+
+/** Returns the hour (0-23) of the given date (or now) in ET. */
+export function getETHour(date: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    hour: 'numeric',
+    hour12: false,
+  }).formatToParts(date);
+  const part = parts.find((p) => p.type === 'hour');
+  if (!part) throw new Error(`Intl.DateTimeFormat did not produce an 'hour' part`);
+  const hour = Number(part.value);
+  return hour === 24 ? 0 : hour; // some engines report midnight as 24
 }
 
 const logsDir = path.join(CONFIG_DIR, 'logs');

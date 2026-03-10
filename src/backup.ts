@@ -13,7 +13,7 @@ import {
   getProjectMetadata,
   setProjectMetadata,
 } from './metadata';
-import logger from './logger';
+import logger, { getETDateString, toETDateString, getETHour } from './logger';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -41,6 +41,9 @@ export interface RunBackupOptions {
 }
 // The buffer time is used to skip backing up projects that were modified very recently, which likely means the user is still working on them.
 export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+// Backups are preferred at or after this hour in ET (23 = 11 PM).
+export const NIGHT_HOUR = 23;
 
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
@@ -248,6 +251,22 @@ export async function runBackup(
       skipped.push(projectName);
       continue;
     }
+
+    // Skip if already backed up today (once-per-day limit).
+    const todayET = getETDateString();
+    if (existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
+      logger.info(`Skipping ${projectName}: already backed up today.`);
+      skipped.push(projectName);
+      continue;
+    }
+
+    // If the project was last modified today, wait until 11 PM ET before backing up.
+    if (toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
+      logger.info(`Skipping ${projectName}: modified today, waiting until 11 PM ET to back up.`);
+      skipped.push(projectName);
+      continue;
+    }
+
     const archiveName = buildArchiveName(projectName, now, cfg.computerName);
     const projectBackupDir = path.join(destination, projectName);
     const outputPath = path.join(projectBackupDir, archiveName);

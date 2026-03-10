@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as metadataModule from '../src/metadata';
+import * as loggerModule from '../src/logger';
 import logger from '../src/logger';
 import {
   expandPath,
@@ -12,6 +13,7 @@ import {
   isAbletonRunning,
   runBackup,
   BUFFER_MS,
+  NIGHT_HOUR,
 } from '../src/backup';
 
 describe('expandPath', () => {
@@ -180,6 +182,9 @@ describe('runBackup', () => {
   let tmpDir: string;
   let logSpy: jest.SpyInstance;
   const ONE_MINUTE_MS = 60_000;
+  // Use a time more than 24 hours ago so the mtime date is "yesterday" in ET,
+  // which bypasses the "modified today, wait for 11 PM" check.
+  const YESTERDAY_MS = 25 * 60 * 60 * 1000;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-runbackup-test-'));
@@ -223,7 +228,7 @@ describe('runBackup', () => {
     fs.mkdirSync(projectDir);
     const alsFile = path.join(projectDir, 'My Song.als');
     fs.writeFileSync(alsFile, '');
-    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    const oldTime = new Date(Date.now() - YESTERDAY_MS);
     fs.utimesSync(alsFile, oldTime, oldTime);
 
     const config = {
@@ -333,7 +338,7 @@ describe('runBackup', () => {
     fs.mkdirSync(projectDir);
     const alsFile = path.join(projectDir, 'My Song.als');
     fs.writeFileSync(alsFile, '');
-    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    const oldTime = new Date(Date.now() - YESTERDAY_MS);
     fs.utimesSync(alsFile, oldTime, oldTime);
 
     await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
@@ -351,7 +356,7 @@ describe('runBackup', () => {
     fs.mkdirSync(projectDir);
     const alsFile = path.join(projectDir, 'My Song.als');
     fs.writeFileSync(alsFile, '');
-    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    const oldTime = new Date(Date.now() - YESTERDAY_MS);
     fs.utimesSync(alsFile, oldTime, oldTime);
 
     await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
@@ -399,7 +404,7 @@ describe('runBackup', () => {
     fs.mkdirSync(projectDir);
     const alsFile = path.join(projectDir, 'My Song.als');
     fs.writeFileSync(alsFile, '');
-    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    const oldTime = new Date(Date.now() - YESTERDAY_MS);
     fs.utimesSync(alsFile, oldTime, oldTime);
 
     const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
@@ -407,6 +412,122 @@ describe('runBackup', () => {
     expect(result.backed).toContain('My Song');
     expect(result.skipped).not.toContain('My Song');
     expect(logSpy).not.toHaveBeenCalledWith('Skipping My Song: updated less than 30 minutes ago.');
+  });
+
+  test('skips project already backed up today', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    // mtime is old enough (> 30 min) so the buffer check is not the reason to skip
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    // lastBackup is today (in ET); lastModified is before the current mtime to ensure it looks changed.
+    // Anchor the timestamp to noon UTC so ET date stays stable regardless of when the test runs.
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const todayNoonISO = new Date(`${todayET}T17:00:00.000Z`).toISOString(); // 12 or 1 PM ET
+    const beforeMtime = new Date(oldTime.getTime() - ONE_MINUTE_MS).toISOString();
+    jest.spyOn(metadataModule, 'getProjectMetadata').mockReturnValue({
+      lastBackup: todayNoonISO,
+      lastModified: beforeMtime,
+    });
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(result.skipped).toContain('My Song');
+    expect(result.backed).not.toContain('My Song');
+    expect(logSpy).toHaveBeenCalledWith('Skipping My Song: already backed up today.');
+  });
+
+  test('skips project modified today when hour is before NIGHT_HOUR', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    // mtime is old enough to pass the buffer check but still "today"
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    // Simulate current ET hour being before NIGHT_HOUR and mtime date == today ET date
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    jest.spyOn(loggerModule, 'getETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR - 1);
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }));
+
+    expect(result.skipped).toContain('My Song');
+    expect(result.backed).not.toContain('My Song');
+    expect(logSpy).toHaveBeenCalledWith(
+      'Skipping My Song: modified today, waiting until 11 PM ET to back up.'
+    );
+  });
+
+  test('backs up project modified today when hour is at or after NIGHT_HOUR', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    // Simulate current ET hour being at NIGHT_HOUR and mtime date == today ET date
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    jest.spyOn(loggerModule, 'getETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR);
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
+
+    expect(result.backed).toContain('My Song');
+    expect(result.skipped).not.toContain('My Song');
+    expect(logSpy).not.toHaveBeenCalledWith(
+      'Skipping My Song: modified today, waiting until 11 PM ET to back up.'
+    );
+  });
+
+  test('backs up project modified on a previous day regardless of current hour', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    const destDir = path.join(tmpDir, 'backups');
+    fs.mkdirSync(projectsDir);
+    fs.mkdirSync(destDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    // Simulate mtime date being yesterday (not today) and current hour being early morning
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString('en-CA', {
+      timeZone: 'America/New_York',
+    });
+    jest.spyOn(loggerModule, 'getETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(yesterday);
+    jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR - 10); // early morning
+
+    const result = await runBackup(makeConfig({ projectsPath: projectsDir, destinationPath: destDir }), { dryRun: true });
+
+    expect(result.backed).toContain('My Song');
+    expect(result.skipped).not.toContain('My Song');
   });
 });
 
