@@ -16,6 +16,7 @@ import {
 import logger, { getETDateString, toETDateString, getETHour, toETTimestampString } from './logger';
 import { checkThrottle, setLastRun } from './throttle';
 import { acquireLock, releaseLock } from './lock';
+import { log } from 'console';
 
 /**
  * Expand a path that may start with "~" to the user's home directory.
@@ -321,12 +322,15 @@ export async function runBackup(
       // potentially slow destination (e.g. Google Drive), then move it over.
       // Prefix with the process PID to avoid collisions if multiple instances run.
       const tmpOutputPath = path.join(os.tmpdir(), `${process.pid}-${archiveName}`);
+      logger.debug(`Creating archive at temporary path: ${tmpOutputPath}`);
       await zipDirectory(projectPath, tmpOutputPath);
       try {
+        logger.debug(`Moving archive to final destination...`);
         fs.renameSync(tmpOutputPath, outputPath);
       } catch (renameErr) {
         if ((renameErr as NodeJS.ErrnoException).code === 'EXDEV') {
           // renameSync cannot cross filesystem boundaries; fall back to copy + delete.
+          logger.debug(`Rename failed, attempting copy + delete fallback: ${(renameErr as Error).message}`);
           fs.copyFileSync(tmpOutputPath, outputPath);
           fs.unlinkSync(tmpOutputPath);
         } else {
@@ -345,6 +349,7 @@ export async function runBackup(
     }
 
     if (!dryRun) {
+      logger.debug('Saving updated metadata to disk.');
       saveMetadata(metadata);
     }
 
@@ -355,6 +360,8 @@ export async function runBackup(
     return;
 
   } finally {
+    logger.debug('Releasing backup lock.');
     releaseLock();
+    logger.debug('Backup lock released.');
   }
 }
