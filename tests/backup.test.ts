@@ -9,6 +9,7 @@ import logger from '../src/logger';
 import {
   expandPath,
   buildArchiveName,
+  buildProgressBar,
   findProjects,
   getDirectoryMtime,
   zipDirectory,
@@ -17,6 +18,7 @@ import {
   BUFFER_MS,
   NIGHT_HOUR,
   HEARTBEAT_INTERVAL_MS,
+  PROGRESS_BAR_WIDTH,
 } from '../src/backup';
 
 describe('expandPath', () => {
@@ -55,6 +57,38 @@ describe('buildArchiveName', () => {
     const date = new Date('2024-03-15T10:30:00.000Z');
     const name = buildArchiveName('My Project', date);
     expect(name).toBe('My Project (Backup 2024-03-15_10-30-00-000).zip');
+  });
+});
+
+describe('buildProgressBar', () => {
+  test('returns an empty bar when nothing has been processed', () => {
+    const bar = buildProgressBar(0, 10);
+    expect(bar).toBe(`[${ ' '.repeat(PROGRESS_BAR_WIDTH)}] (0/10 files)`);
+  });
+
+  test('returns an empty bar when total is zero', () => {
+    const bar = buildProgressBar(0, 0);
+    expect(bar).toBe(`[${ ' '.repeat(PROGRESS_BAR_WIDTH)}] (0/0 files)`);
+  });
+
+  test('returns a half-filled bar at 50%', () => {
+    const bar = buildProgressBar(5, 10);
+    const filled = Math.round(0.5 * PROGRESS_BAR_WIDTH);
+    const expected = '='.repeat(filled - 1) + '>' + ' '.repeat(PROGRESS_BAR_WIDTH - filled);
+    expect(bar).toBe(`[${expected}] (5/10 files)`);
+  });
+
+  test('returns a fully filled bar when complete', () => {
+    const bar = buildProgressBar(10, 10);
+    const expected = '='.repeat(PROGRESS_BAR_WIDTH - 1) + '>';
+    expect(bar).toBe(`[${expected}] (10/10 files)`);
+  });
+
+  test('respects a custom width', () => {
+    const bar = buildProgressBar(1, 2, 10);
+    const filled = Math.round(0.5 * 10);
+    const expected = '='.repeat(filled - 1) + '>' + ' '.repeat(10 - filled);
+    expect(bar).toBe(`[${expected}] (1/2 files)`);
   });
 });
 
@@ -195,7 +229,10 @@ describe('zipDirectory', () => {
     jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
     await zipPromise;
 
-    expect(logSpy).toHaveBeenCalledWith('\tStill archiving...');
+    const progressCalls = logSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && /^\t\[.*\] \(\d+\/\d+ files\)$/.test(call[0])
+    );
+    expect(progressCalls.length).toBeGreaterThanOrEqual(1);
 
     jest.useRealTimers();
     jest.restoreAllMocks();
@@ -217,7 +254,7 @@ describe('zipDirectory', () => {
     await zipPromise;
 
     const heartbeatCalls = logSpy.mock.calls.filter(
-      (call) => typeof call[0] === 'string' && call[0] === '\tStill archiving...'
+      (call) => typeof call[0] === 'string' && /^\t\[.*\] \(\d+\/\d+ files\)$/.test(call[0])
     );
     expect(heartbeatCalls.length).toBe(2);
 

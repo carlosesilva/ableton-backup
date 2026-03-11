@@ -51,6 +51,24 @@ export const NIGHT_HOUR = 23;
 // How often (in ms) to emit a heartbeat log while a zip archive is being created.
 export const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 seconds
 
+// Width (in characters) of the progress bar drawn inside the brackets.
+export const PROGRESS_BAR_WIDTH = 20;
+
+/**
+ * Build a human-readable progress bar string.
+ *
+ * Example output: `[=========>          ] (5/20 files)`
+ */
+export function buildProgressBar(processed: number, total: number, width: number = PROGRESS_BAR_WIDTH): string {
+  const safeTotal = total > 0 ? total : 1;
+  const ratio = Math.min(processed / safeTotal, 1);
+  const filled = Math.round(ratio * width);
+  const bar = filled > 0
+    ? '='.repeat(filled - 1) + '>' + ' '.repeat(width - filled)
+    : ' '.repeat(width);
+  return `[${bar}] (${processed}/${total} files)`;
+}
+
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
     // Includes helper processes under the same app bundle path.
@@ -135,15 +153,21 @@ export function getDirectoryMtime(dirPath: string): Date {
 /**
  * Create a zip archive of the given source directory at the given output path.
  * Returns a Promise that resolves when the archive is complete.
- * Periodically emits a heartbeat log so the caller knows archiving is still in progress.
+ * Periodically emits a visual progress bar so the caller knows archiving is still in progress.
  */
 export function zipDirectory(sourceDir: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
+    let progressEntries = { total: 0, processed: 0 };
+
+    archive.on('progress', (progress) => {
+      progressEntries = progress.entries;
+    });
+
     const heartbeat = setInterval(() => {
-      logger.info('\tStill archiving...');
+      logger.info(`\t${buildProgressBar(progressEntries.processed, progressEntries.total)}`);
     }, HEARTBEAT_INTERVAL_MS);
 
     output.on('close', () => {
