@@ -36,10 +36,11 @@ You will be prompted for:
 | Setting | Description | Default |
 |---|---|---|
 | Ableton path | Path to the Ableton Live `.app` bundle | `/Applications/Ableton Live 12 Suite.app` |
-| Projects path | Folder containing your Live Projects | `~/Music/Ableton` |
-| Destination path | Where backup zips will be saved | `~/Documents/Ableton Backups` |
+| Projects path | Folder containing your Live Projects | `~/Documents/Ableton/Live Sets` |
+| Destination path | Where backup zips will be saved | `~/Documents/Ableton/Live Sets Backups` |
 | Node path | Node.js executable used by cron | `~/.local/share/mise/shims/node` |
-| Cron frequency | How often to check for changes ([cron expression](https://crontab.guru/)) | `0 * * * *` (hourly) |
+| Cron frequency | How often to check for changes ([cron expression](https://crontab.guru/)) | `* * * * *` (every minute) |
+| Computer name | Suffix added to backup zip filenames | Your macOS hostname |
 | Debug mode | Sets `ABLETON_BACKUP_LOG_LEVEL=debug` for cron runs | No |
 | Activate now | Install the cron job immediately | No |
 
@@ -66,6 +67,7 @@ ableton-backup config [opts]  Update individual settings (see below)
 --destination-path <path>   Set the backup destination path
 --node-path <path>          Set Node.js binary path used by cron
 --cron-frequency <expr>     Set the cron frequency expression
+--computer-name <name>      Set the computer name added to zip filenames
 --debug-mode <true|false>   Enable or disable debug mode for cron runs
 --active <true|false>       Enable or disable automatic backups
 ```
@@ -85,15 +87,24 @@ ableton-backup run --dry-run
 ## How it works
 
 1. On each cron tick, the configured Node binary runs `dist/cli.js run` automatically.
-2. If Ableton Live is currently open, the run is skipped to avoid performance impact.
-3. Every Live Project directory (a folder containing a `.als` file) under the configured projects path is inspected.
-4. If a project has been modified since its last backup (or has never been backed up), it is zipped to the destination folder.
-5. Backup archives are named:
+2. Non-dry-run executions are throttled so only one backup cycle starts within a 10 minute window.
+3. If Ableton Live is currently open, the run is skipped to avoid performance impact.
+4. Every Live Project directory (a top-level folder containing a `.als` file) under the configured projects path is inspected.
+5. A project is skipped when any of these rules apply:
+
+   - no changes since its last successful backup
+   - it was modified less than 30 minutes ago
+   - it was already backed up earlier the same ET day
+   - it was modified today and it is still before 11 PM ET
+
+6. Projects that need backup are zipped to a temporary local file first, then moved to the configured destination.
+7. Backup archives are named:
 
    ```
-   <Project Name> (Backup YYYY-MM-DD_HH-MM-SS-mmm).zip
+   <Project Name> (Backup YYYY-MM-DD_HH-MM-SS-mmm <Computer Name>).zip
    ```
 
+Configuration is stored in `~/.ableton-backup/config.yaml`.
 Backup metadata (timestamps of the last backup per project) is stored in `~/.ableton-backup/metadata.yaml`.
 
 ## Development
@@ -112,9 +123,15 @@ npm run dev -- <command>
 npm test
 ```
 
-## Debug Logging
+## Logging and Debug Mode
 
-Set `ABLETON_BACKUP_LOG_LEVEL=debug` to show debug logs (including lock/throttle skip reasons):
+Every run writes human-readable log lines to the terminal and to a daily log file at:
+
+```text
+~/.ableton-backup/logs/YYYY-MM-DD.log
+```
+
+Set `ABLETON_BACKUP_LOG_LEVEL=debug` to include debug details such as lock and throttle skip reasons:
 
 ```bash
 ABLETON_BACKUP_LOG_LEVEL=debug ableton-backup run --dry-run
@@ -122,3 +139,22 @@ ABLETON_BACKUP_LOG_LEVEL=debug ableton-backup run --dry-run
 
 Valid values are `error`, `warn`, `info`, `http`, `verbose`, `debug`, and `silly`.
 If unset (or invalid), the default is `info`.
+
+Example run output:
+
+```bash
+2026-03-13 15:59:01 info: Starting backup cycle...
+2026-03-13 15:59:01 info: Ableton is not running. Proceeding with backup.
+2026-03-13 15:59:01 info: Found 11 project(s) in /Users/Shared/Ableton/Live Sets.
+2026-03-13 15:59:01 info: Checking project: Hail to the King Project
+2026-03-13 15:59:01 info:	Skipping: no changes since last backup.
+2026-03-13 15:59:01 info: Checking project: Renegade Project
+2026-03-13 15:59:01 info:	Backing up...
+2026-03-13 15:59:01 info:	[                                        ] (0/356 files)
+2026-03-13 15:59:11 info:	[===============>                        ] (140/356 files)
+2026-03-13 15:59:21 info:	[=====================================>  ] (336/356 files)
+2026-03-13 15:59:23 info:	Backed up to /Users/johndoe/Google Drive/My Drive/Ableton/Live Sets/Backups/Renegade Project/Renegade Project (Backup 2026-03-13_19-59-01-255 John-MacBook-Pro).zip
+2026-03-13 15:59:23 info: Checking project: Despacito Project
+2026-03-13 15:59:23 info:	Skipping: no changes since last backup.
+2026-03-13 15:59:23 info: Backup complete. Backed up: 1, Skipped: 2.
+```

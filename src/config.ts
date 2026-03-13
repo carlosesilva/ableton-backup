@@ -19,8 +19,8 @@ export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.yaml');
 
 export const DEFAULT_CONFIG: Config = {
   abletonPath: '/Applications/Ableton Live 12 Suite.app',
-  projectsPath: path.join(os.homedir(), 'Music', 'Ableton'),
-  destinationPath: path.join(os.homedir(), 'Documents', 'Ableton Backups'),
+  projectsPath: path.join(os.homedir(), 'Documents', 'Ableton', 'Live Sets'),
+  destinationPath: path.join(os.homedir(), 'Documents', 'Ableton', 'Live Sets Backups'),
   nodePath: '~/.local/share/mise/shims/node',
   cronFrequency: '* * * * *',
   active: false,
