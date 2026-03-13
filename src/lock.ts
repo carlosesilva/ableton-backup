@@ -93,16 +93,25 @@ export function acquireLock(): boolean {
 }
 
 /**
- * Release the backup lock by removing the lock file.
- * Safe to call even when no lock is held.
+ * Release the backup lock only if this process currently owns it.
+ *
+ * Returns `true` if the lock was released by this process, otherwise `false`.
  */
-export function releaseLock(): void {
+export function releaseLock(): boolean {
+  const data = readLockData();
+  if (data === null) {
+    return false;
+  }
+
+  if (data.pid !== process.pid) {
+    return false;
+  }
+
   try {
-    if (fs.existsSync(LOCK_FILE)) {
-      fs.unlinkSync(LOCK_FILE);
-    }
+    fs.unlinkSync(LOCK_FILE);
+    return true;
   } catch {
-    // Ignore errors – best-effort cleanup.
+    return false;
   }
 }
 

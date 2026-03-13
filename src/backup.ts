@@ -361,7 +361,10 @@ export async function runBackup(
 
   } finally {
     logger.debug('Releasing backup lock.');
-    releaseLock();
-    logger.debug('Backup lock released.');
+    if (releaseLock()) {
+      logger.debug('Backup lock released.');
+    } else {
+      logger.debug('Backup lock not released by this process (not owner or already missing).');
+    }
   }
 }

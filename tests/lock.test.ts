@@ -39,8 +39,8 @@ describe('lock', () => {
     if (fs.existsSync(LOCK_FILE)) fs.unlinkSync(LOCK_FILE);
   });
 
-  test('LOCK_EXPIRY_MS is 1 hour in milliseconds', () => {
-    expect(LOCK_EXPIRY_MS).toBe(60 * 60 * 1000);
+  test('LOCK_EXPIRY_MS is 1 day in milliseconds', () => {
+    expect(LOCK_EXPIRY_MS).toBe(24 * 60 * 60 * 1000);
   });
 
   test('getLockPid returns null when no file exists', () => {
@@ -92,15 +92,22 @@ describe('lock', () => {
     expect(fs.existsSync(LOCK_FILE)).toBe(true);
   });
 
-  test('releaseLock removes the lock file', () => {
+  test('releaseLock removes the lock file when owned by current process', () => {
     acquireLock();
     expect(fs.existsSync(LOCK_FILE)).toBe(true);
-    releaseLock();
+    expect(releaseLock()).toBe(true);
     expect(fs.existsSync(LOCK_FILE)).toBe(false);
   });
 
   test('releaseLock is safe to call when no lock file exists', () => {
     expect(() => releaseLock()).not.toThrow();
+    expect(releaseLock()).toBe(false);
+  });
+
+  test('releaseLock does not remove lock held by another process', () => {
+    writeLock(999999999, new Date());
+    expect(releaseLock()).toBe(false);
+    expect(fs.existsSync(LOCK_FILE)).toBe(true);
   });
 
   test('isLocked returns false when no lock file exists', () => {
