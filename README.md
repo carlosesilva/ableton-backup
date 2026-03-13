@@ -145,7 +145,7 @@ Example run output:
 ```bash
 2026-03-13 15:59:01 info: Starting backup cycle...
 2026-03-13 15:59:01 info: Ableton is not running. Proceeding with backup.
-2026-03-13 15:59:01 info: Found 11 project(s) in /Users/Shared/Ableton/Live Sets.
+2026-03-13 15:59:01 info: Found 3 project(s) in /Users/Shared/Ableton/Live Sets.
 2026-03-13 15:59:01 info: Checking project: Hail to the King Project
 2026-03-13 15:59:01 info:	Skipping: no changes since last backup.
 2026-03-13 15:59:01 info: Checking project: Renegade Project
