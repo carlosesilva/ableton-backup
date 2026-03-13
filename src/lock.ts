@@ -4,8 +4,8 @@ import { CONFIG_DIR, ensureConfigDir } from './config';
 
 export const LOCK_FILE = path.join(CONFIG_DIR, 'backup.lock');
 
-/** Maximum age of a lock before it is considered expired (1 hour). */
-export const LOCK_EXPIRY_MS = 60 * 60 * 1000;
+/** Maximum age of a lock before it is considered expired (1 day). */
+export const LOCK_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 interface LockData {
   pid: number;
