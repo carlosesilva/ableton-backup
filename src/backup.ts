@@ -49,7 +49,25 @@ export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
 export const NIGHT_HOUR = 23;
 
 // How often (in ms) to emit a heartbeat log while a zip archive is being created.
-export const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 seconds
+export const HEARTBEAT_INTERVAL_MS = 10 * 1000; // 10 seconds
+
+// Width (in characters) of the progress bar drawn inside the brackets.
+export const PROGRESS_BAR_WIDTH = 40;
+
+/**
+ * Build a human-readable progress bar string.
+ *
+ * Example output: `[=========>          ] (5/20 files)`
+ */
+export function buildProgressBar(processed: number, total: number, width: number = PROGRESS_BAR_WIDTH): string {
+  const safeTotal = total > 0 ? total : 1;
+  const ratio = Math.min(processed / safeTotal, 1);
+  const filled = Math.round(ratio * width);
+  const bar = filled > 0
+    ? '='.repeat(filled - 1) + '>' + ' '.repeat(width - filled)
+    : ' '.repeat(width);
+  return `[${bar}] (${processed}/${total} files)`;
+}
 
 export function isAbletonRunning(abletonPath: string): MatchedProcess[] {
   try {
@@ -133,18 +151,53 @@ export function getDirectoryMtime(dirPath: string): Date {
 }
 
 /**
+ * Count the total number of files in a directory recursively.
+ */
+export function countFiles(dirPath: string): number {
+  let count = 0;
+  const walk = (current: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        walk(path.join(current, entry.name));
+      } else if (entry.isFile()) {
+        count++;
+      }
+    }
+  };
+  walk(dirPath);
+  return count;
+}
+
+/**
  * Create a zip archive of the given source directory at the given output path.
  * Returns a Promise that resolves when the archive is complete.
- * Periodically emits a heartbeat log so the caller knows archiving is still in progress.
+ * Periodically emits a visual progress bar so the caller knows archiving is still in progress.
  */
 export function zipDirectory(sourceDir: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
+    // Count files upfront so the denominator is fixed during archiving.
+    const totalFiles = countFiles(sourceDir);
+    let processedFiles = 0;
+
+    // Emit an initial progress bar before archiving starts, so the user sees immediate feedback even if the source directory is empty.
+    logger.info(`\t${buildProgressBar(processedFiles, totalFiles)}`);
     const heartbeat = setInterval(() => {
-      logger.info('\tStill archiving...');
+      logger.info(`\t${buildProgressBar(processedFiles, totalFiles)}`);
     }, HEARTBEAT_INTERVAL_MS);
+
+    // 
+    archive.on('progress', (progress) => {
+      processedFiles = progress.entries.processed;
+    });
 
     output.on('close', () => {
       clearInterval(heartbeat);
