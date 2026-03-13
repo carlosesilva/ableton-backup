@@ -10,6 +10,7 @@ import {
   expandPath,
   buildArchiveName,
   buildProgressBar,
+  countFiles,
   findProjects,
   getDirectoryMtime,
   zipDirectory,
@@ -89,6 +90,40 @@ describe('buildProgressBar', () => {
     const filled = Math.round(0.5 * 10);
     const expected = '='.repeat(filled - 1) + '>' + ' '.repeat(10 - filled);
     expect(bar).toBe(`[${expected}] (1/2 files)`);
+  });
+});
+
+describe('countFiles', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ableton-countfiles-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns 0 for an empty directory', () => {
+    expect(countFiles(tmpDir)).toBe(0);
+  });
+
+  test('counts files in a flat directory', () => {
+    fs.writeFileSync(path.join(tmpDir, 'a.txt'), '');
+    fs.writeFileSync(path.join(tmpDir, 'b.txt'), '');
+    expect(countFiles(tmpDir)).toBe(2);
+  });
+
+  test('counts files recursively', () => {
+    const sub = path.join(tmpDir, 'sub');
+    fs.mkdirSync(sub);
+    fs.writeFileSync(path.join(tmpDir, 'top.txt'), '');
+    fs.writeFileSync(path.join(sub, 'nested.txt'), '');
+    expect(countFiles(tmpDir)).toBe(2);
+  });
+
+  test('returns 0 for a non-existent directory', () => {
+    expect(countFiles(path.join(tmpDir, 'does-not-exist'))).toBe(0);
   });
 });
 

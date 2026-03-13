@@ -151,6 +151,30 @@ export function getDirectoryMtime(dirPath: string): Date {
 }
 
 /**
+ * Count the total number of files in a directory recursively.
+ */
+export function countFiles(dirPath: string): number {
+  let count = 0;
+  const walk = (current: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        walk(path.join(current, entry.name));
+      } else if (entry.isFile()) {
+        count++;
+      }
+    }
+  };
+  walk(dirPath);
+  return count;
+}
+
+/**
  * Create a zip archive of the given source directory at the given output path.
  * Returns a Promise that resolves when the archive is complete.
  * Periodically emits a visual progress bar so the caller knows archiving is still in progress.
@@ -160,14 +184,16 @@ export function zipDirectory(sourceDir: string, outputPath: string): Promise<voi
     const output = fs.createWriteStream(outputPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
-    let progressEntries = { total: 0, processed: 0 };
+    // Count files upfront so the denominator is fixed during archiving.
+    const totalFiles = countFiles(sourceDir);
+    let processedFiles = 0;
 
     archive.on('progress', (progress) => {
-      progressEntries = progress.entries;
+      processedFiles = progress.entries.processed;
     });
 
     const heartbeat = setInterval(() => {
-      logger.info(`\t${buildProgressBar(progressEntries.processed, progressEntries.total)}`);
+      logger.info(`\t${buildProgressBar(processedFiles, totalFiles)}`);
     }, HEARTBEAT_INTERVAL_MS);
 
     output.on('close', () => {
