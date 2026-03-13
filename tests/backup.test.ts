@@ -232,6 +232,8 @@ describe('zipDirectory', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -291,10 +293,7 @@ describe('zipDirectory', () => {
     const heartbeatCalls = logSpy.mock.calls.filter(
       (call) => typeof call[0] === 'string' && /^\t\[.*\] \(\d+\/\d+ files\)$/.test(call[0])
     );
-    expect(heartbeatCalls.length).toBe(2);
-
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    expect(heartbeatCalls.length).toBe(3);
   });
 });
 
@@ -313,7 +312,7 @@ describe('runBackup', () => {
     jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: false });
     jest.spyOn(throttleModule, 'setLastRun').mockImplementation(() => {});
     jest.spyOn(lockModule, 'acquireLock').mockReturnValue(true);
-    jest.spyOn(lockModule, 'releaseLock').mockImplementation(() => {});
+    jest.spyOn(lockModule, 'releaseLock').mockReturnValue(true);
     logSpy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
   });
 
