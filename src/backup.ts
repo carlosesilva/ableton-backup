@@ -49,10 +49,10 @@ export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
 export const NIGHT_HOUR = 23;
 
 // How often (in ms) to emit a heartbeat log while a zip archive is being created.
-export const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 seconds
+export const HEARTBEAT_INTERVAL_MS = 10 * 1000; // 10 seconds
 
 // Width (in characters) of the progress bar drawn inside the brackets.
-export const PROGRESS_BAR_WIDTH = 20;
+export const PROGRESS_BAR_WIDTH = 40;
 
 /**
  * Build a human-readable progress bar string.
@@ -188,13 +188,16 @@ export function zipDirectory(sourceDir: string, outputPath: string): Promise<voi
     const totalFiles = countFiles(sourceDir);
     let processedFiles = 0;
 
-    archive.on('progress', (progress) => {
-      processedFiles = progress.entries.processed;
-    });
-
+    // Emit an initial progress bar before archiving starts, so the user sees immediate feedback even if the source directory is empty.
+    logger.info(`\t${buildProgressBar(processedFiles, totalFiles)}`);
     const heartbeat = setInterval(() => {
       logger.info(`\t${buildProgressBar(processedFiles, totalFiles)}`);
     }, HEARTBEAT_INTERVAL_MS);
+
+    // 
+    archive.on('progress', (progress) => {
+      processedFiles = progress.entries.processed;
+    });
 
     output.on('close', () => {
       clearInterval(heartbeat);
