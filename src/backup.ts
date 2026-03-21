@@ -41,6 +41,7 @@ export interface MatchedProcess {
 
 export interface RunBackupOptions {
   dryRun?: boolean;
+  force?: boolean;
 }
 // The buffer time is used to skip backing up projects that were modified very recently, which likely means the user is still working on them.
 export const BUFFER_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -268,6 +269,7 @@ export async function runBackup(
 ): Promise<void> {
   const cfg = config ?? loadConfig();
   const dryRun = options?.dryRun ?? false;
+  const force = options?.force ?? false;
 
   // Ensure only one backup instance runs at a time.
   if (!acquireLock()) {
@@ -290,7 +292,7 @@ export async function runBackup(
       setLastRun(new Date());
     }
 
-    logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
+    logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}${force ? ' (force)' : ''}...`);
 
     const matchedProcesses = isAbletonRunning(cfg.abletonPath);
     if (matchedProcesses.length > 0) {
@@ -324,7 +326,7 @@ export async function runBackup(
       const mtime = getDirectoryMtime(projectPath);
       const existing = getProjectMetadata(metadata, projectPath);
 
-      if (existing) {
+      if (!force && existing) {
         const lastModified = new Date(existing.lastModified);
         if (mtime <= lastModified) {
           logger.info(`\tSkipping: no changes since last backup.`);
@@ -334,7 +336,7 @@ export async function runBackup(
       }
 
       const now = new Date();
-      if (now.getTime() - mtime.getTime() < BUFFER_MS) {
+      if (!force && now.getTime() - mtime.getTime() < BUFFER_MS) {
         logger.info(`\tSkipping: updated less than 30 minutes ago.`);
         skipped.push(projectName);
         continue;
@@ -342,14 +344,14 @@ export async function runBackup(
 
       // Skip if already backed up today (once-per-day limit).
       const todayET = getETDateString();
-      if (existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
+      if (!force && existing && toETDateString(new Date(existing.lastBackup)) === todayET) {
         logger.info(`\tSkipping: already backed up today.`);
         skipped.push(projectName);
         continue;
       }
 
       // If the project was last modified today, wait until 11 PM ET before backing up.
-      if (toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
+      if (!force && toETDateString(mtime) === todayET && getETHour(now) < NIGHT_HOUR) {
         logger.info(`\tSkipping: modified today, waiting until 11 PM ET to back up.`);
         skipped.push(projectName);
         continue;
