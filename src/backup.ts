@@ -286,10 +286,6 @@ export async function runBackup(
       }
     }
 
-    if (!dryRun) {
-      setLastRun(new Date());
-    }
-
     logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}...`);
 
     const matchedProcesses = isAbletonRunning(cfg.abletonPath);
@@ -413,6 +409,10 @@ export async function runBackup(
     return;
 
   } finally {
+    if (!dryRun) {
+      setLastRun(new Date());
+    }
+
     logger.debug('Releasing backup lock.');
     if (releaseLock()) {
       logger.debug('Backup lock released.');
