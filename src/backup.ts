@@ -406,13 +406,13 @@ export async function runBackup(
       `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
     );
 
-    return;
-
-  } finally {
     if (!dryRun) {
       setLastRun(new Date());
     }
 
+    return;
+
+  } finally {
     logger.debug('Releasing backup lock.');
     if (releaseLock()) {
       logger.debug('Backup lock released.');
