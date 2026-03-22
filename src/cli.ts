@@ -192,11 +192,13 @@ program
   .command('run')
   .description('Run a backup cycle immediately')
   .option('--dry-run', 'Show which projects would be backed up without writing files')
-  .action(async (options: { dryRun?: boolean }) => {
+  .option('--force', 'Skip per-project skip checks and back up all projects immediately')
+  .action(async (options: { dryRun?: boolean; force?: boolean }) => {
     const config = loadConfig();
     const dryRun = options.dryRun ?? false;
+    const force = options.force ?? false;
     try {
-      await runBackup(config, { dryRun });
+      await runBackup(config, { dryRun, force });
     } catch (err) {
       logger.error(`Backup run failed: ${(err as Error).message}`);
       process.exit(1);

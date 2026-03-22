@@ -676,6 +676,18 @@ describe('runBackup', () => {
     expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run)...');
   });
 
+  test('does not throttle force runs', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const until = new Date(Date.now() + 5 * 60 * 1000);
+    jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: true, until });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { force: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (force)...');
+  });
+
   test('records run time via setLastRun when not throttled', async () => {
     const projectsDir = path.join(tmpDir, 'projects');
     fs.mkdirSync(projectsDir);
@@ -692,6 +704,117 @@ describe('runBackup', () => {
     await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true });
 
     expect(throttleModule.setLastRun).not.toHaveBeenCalled();
+  });
+
+  test('logs "Starting backup cycle (force)..." when force is true', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { force: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (force)...');
+  });
+
+  test('logs "Starting backup cycle (dry run) (force)..." when both dry run and force are true', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run) (force)...');
+  });
+
+  test('force still skips project with no changes since last backup', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - YESTERDAY_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    // Mock metadata so mtime <= lastModified (project looks unchanged)
+    const futureDate = new Date(Date.now() + ONE_MINUTE_MS).toISOString();
+    jest.spyOn(metadataModule, 'getProjectMetadata').mockReturnValue({
+      lastBackup: futureDate,
+      lastModified: futureDate,
+    });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
+
+    expect(logSpy).toHaveBeenCalledWith('\tSkipping: no changes since last backup.');
+    const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunCall).toBeUndefined();
+  });
+
+  test('force skips the "updated less than 30 minutes ago" check', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    // mtime is very recent (< 30 min) -- leave the file as-is
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
+
+    expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: updated less than 30 minutes ago.');
+    const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunCall).toBeDefined();
+  });
+
+  test('force skips the "already backed up today" check', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const todayNoonISO = new Date(`${todayET}T17:00:00.000Z`).toISOString();
+    const beforeMtime = new Date(oldTime.getTime() - ONE_MINUTE_MS).toISOString();
+    jest.spyOn(metadataModule, 'getProjectMetadata').mockReturnValue({
+      lastBackup: todayNoonISO,
+      lastModified: beforeMtime,
+    });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
+
+    expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: already backed up today.');
+    const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunCall).toBeDefined();
+  });
+
+  test('force skips the "modified today, waiting until 11 PM ET" check', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const projectDir = path.join(projectsDir, 'My Song');
+    fs.mkdirSync(projectDir);
+    const alsFile = path.join(projectDir, 'My Song.als');
+    fs.writeFileSync(alsFile, '');
+    const oldTime = new Date(Date.now() - BUFFER_MS - ONE_MINUTE_MS);
+    fs.utimesSync(alsFile, oldTime, oldTime);
+
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    jest.spyOn(loggerModule, 'getETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'toETDateString').mockReturnValue(today);
+    jest.spyOn(loggerModule, 'getETHour').mockReturnValue(NIGHT_HOUR - 1);
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
+
+    expect(logSpy).not.toHaveBeenCalledWith(
+      '\tSkipping: modified today, waiting until 11 PM ET to back up.'
+    );
+    const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
+    expect(dryRunCall).toBeDefined();
   });
 });
 
