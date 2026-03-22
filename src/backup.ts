@@ -326,7 +326,7 @@ export async function runBackup(
       const mtime = getDirectoryMtime(projectPath);
       const existing = getProjectMetadata(metadata, projectPath);
 
-      if (!force && existing) {
+      if (existing) {
         const lastModified = new Date(existing.lastModified);
         if (mtime <= lastModified) {
           logger.info(`\tSkipping: no changes since last backup.`);

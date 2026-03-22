@@ -712,7 +712,7 @@ describe('runBackup', () => {
     expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run) (force)...');
   });
 
-  test('force skips the "no changes since last backup" check', async () => {
+  test('force still skips project with no changes since last backup', async () => {
     const projectsDir = path.join(tmpDir, 'projects');
     fs.mkdirSync(projectsDir);
 
@@ -732,9 +732,9 @@ describe('runBackup', () => {
 
     await runBackup(makeConfig({ projectsPath: projectsDir }), { dryRun: true, force: true });
 
-    expect(logSpy).not.toHaveBeenCalledWith('\tSkipping: no changes since last backup.');
+    expect(logSpy).toHaveBeenCalledWith('\tSkipping: no changes since last backup.');
     const dryRunCall = findLogCall(logSpy, '\t[Dry run] Would back up My Song to ');
-    expect(dryRunCall).toBeDefined();
+    expect(dryRunCall).toBeUndefined();
   });
 
   test('force skips the "updated less than 30 minutes ago" check', async () => {
