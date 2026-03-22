@@ -280,7 +280,7 @@ export async function runBackup(
 
   try {
     // Throttle non-dry-run executions to once per THROTTLE_WINDOW_MS.
-    if (!dryRun) {
+    if (!dryRun && !force) {
       const throttleState = checkThrottle();
       if (throttleState.throttled && throttleState.until) {
         logger.debug(`Backup run throttled until ${toETTimestampString(throttleState.until)}`);

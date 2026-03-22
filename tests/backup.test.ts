@@ -676,6 +676,18 @@ describe('runBackup', () => {
     expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (dry run)...');
   });
 
+  test('does not throttle force runs', async () => {
+    const projectsDir = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projectsDir);
+
+    const until = new Date(Date.now() + 5 * 60 * 1000);
+    jest.spyOn(throttleModule, 'checkThrottle').mockReturnValue({ throttled: true, until });
+
+    await runBackup(makeConfig({ projectsPath: projectsDir }), { force: true });
+
+    expect(logSpy).toHaveBeenCalledWith('Starting backup cycle (force)...');
+  });
+
   test('records run time via setLastRun when not throttled', async () => {
     const projectsDir = path.join(tmpDir, 'projects');
     fs.mkdirSync(projectsDir);
