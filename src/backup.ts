@@ -288,10 +288,6 @@ export async function runBackup(
       }
     }
 
-    if (!dryRun) {
-      setLastRun(new Date());
-    }
-
     logger.info(`Starting backup cycle${dryRun ? ' (dry run)' : ''}${force ? ' (force)' : ''}...`);
 
     const matchedProcesses = isAbletonRunning(cfg.abletonPath);
@@ -411,6 +407,10 @@ export async function runBackup(
     logger.info(
       `Backup complete. Backed up: ${backed.length}, Skipped: ${skipped.length}.`
     );
+
+    if (!dryRun) {
+      setLastRun(new Date());
+    }
 
     return;
 
